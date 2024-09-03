@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:fl_chart/fl_chart.dart';
@@ -28,13 +29,17 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   IO.Socket? socket;
   bool _isConnected = false;
-  bool _isConnectionRequested = false;  // 연결 요청을 받았는지 여부를 추적합니다.
-  bool _isConnectionAccepted = false;  // 연결 수락 여부를 추적합니다.
-  String _patientName = ''; // 연결 요청을 보낸 환자의 이름
+  bool _isConnectionRequested = false;
+  bool _isConnectionAccepted = false;
+  String _patientName = '';
 
-  List<FlSpot> _dataPoints1 = [];  // 첫 번째 데이터 시리즈
-  List<FlSpot> _dataPoints2 = [];  // 두 번째 데이터 시리즈
-  double _xValue = 0;  // X축 값 추적
+  List<FlSpot> _dataPoints1 = [];
+  List<FlSpot> _dataPoints2 = [];
+  List<String> _timeLabels = [];
+  int _maxDataPoints = 100;  // 그래프에 표시될 최대 데이터 포인트 수
+
+  StreamController<List<FlSpot>>? _dataStreamController1;
+  StreamController<List<FlSpot>>? _dataStreamController2;
 
   @override
   void initState() {
@@ -42,14 +47,22 @@ class _MyHomePageState extends State<MyHomePage> {
     _connectWebSocket();
   }
 
+  @override
+  void dispose() {
+    _dataStreamController1?.close();
+    _dataStreamController2?.close();
+    _disconnectWebSocket();
+    super.dispose();
+  }
+
   void _connectWebSocket() {
     socket = IO.io(
       'ws://192.168.0.72:5000',
       IO.OptionBuilder()
-          .setTransports(['websocket']) // 웹소켓 전송 사용
-          .enableAutoConnect() // 자동 연결 활성화
-          .enableForceNew() // 새 연결 강제 적용
-          .setExtraHeaders({'Upgrade': 'websocket'}) // 웹소켓 업그레이드
+          .setTransports(['websocket'])
+          .enableAutoConnect()
+          .enableForceNew()
+          .setExtraHeaders({'Upgrade': 'websocket'})
           .build(),
     );
 
@@ -58,7 +71,6 @@ class _MyHomePageState extends State<MyHomePage> {
         _isConnected = true;
       });
       print('Connected to the server');
-      // 상담사 로그인 이벤트 서버로 전송
       socket!.emit('counselor_login', {'counselor_id': '1'});
     });
 
@@ -79,18 +91,25 @@ class _MyHomePageState extends State<MyHomePage> {
     });
 
     socket!.on('data_update', (data) {
-      print('Data received: $data');
-      setState(() {
-        _xValue += 1;  // X축 값을 증가시킴
-        _dataPoints1.add(FlSpot(_xValue, double.parse(data['data1'].toString())));
-        _dataPoints2.add(FlSpot(_xValue, double.parse(data['data2'].toString())));
+      if (_dataStreamController1 == null || _dataStreamController2 == null) {
+        return;
+      }
 
-        // 데이터 포인트가 너무 많아지면 제거하여 그래프가 고정된 크기를 유지하게 함
-        if (_dataPoints1.length > 20) {
-          _dataPoints1.removeAt(0);
-          _dataPoints2.removeAt(0);
-        }
-      });
+      final String time = data['time']; // 서버에서 받은 시간
+      _timeLabels.add(time);
+
+      _dataPoints1.add(FlSpot(_timeLabels.length.toDouble(), double.parse(data['data1'].toString())));
+      _dataPoints2.add(FlSpot(_timeLabels.length.toDouble(), double.parse(data['data2'].toString())));
+
+      // 데이터 포인트 제한
+      if (_dataPoints1.length > _maxDataPoints) {
+        _dataPoints1.removeAt(0);
+        _dataPoints2.removeAt(0);
+        _timeLabels.removeAt(0);
+      }
+
+      _dataStreamController1!.add(_dataPoints1);
+      _dataStreamController2!.add(_dataPoints2);
     });
 
     socket!.on('connection_accepted', (data) {
@@ -126,6 +145,20 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void _startDataTransmission() {
+    if (_dataStreamController1 != null && _dataStreamController2 != null) {
+      _dataStreamController1!.close();
+      _dataStreamController2!.close();
+    }
+
+    _dataStreamController1 = StreamController<List<FlSpot>>();
+    _dataStreamController2 = StreamController<List<FlSpot>>();
+
+    setState(() {
+      _dataPoints1.clear();
+      _dataPoints2.clear();
+      _timeLabels.clear();
+    });
+
     if (socket != null && socket!.connected) {
       socket!.emit('start');
     }
@@ -134,13 +167,12 @@ class _MyHomePageState extends State<MyHomePage> {
   void _stopDataTransmission() {
     if (socket != null && socket!.connected) {
       socket!.emit('stop');
-    }
-  }
+      socket!.off('data_update');
 
-  @override
-  void dispose() {
-    _disconnectWebSocket();
-    super.dispose();
+      _dataStreamController1?.close();
+      _dataStreamController2?.close();
+
+    }
   }
 
   @override
@@ -156,42 +188,65 @@ class _MyHomePageState extends State<MyHomePage> {
             padding: const EdgeInsets.all(16.0),
             child: Column(
               children: [
-                if (_isConnected && _isConnectionRequested) Column(
-                  children: [
-                    Text('Connect with $_patientName?'),
-                    SizedBox(height: 8),
-                    ElevatedButton(
-                      onPressed: _acceptConnection,
-                      child: Text('Accept Connection'),
-                    ),
-                    SizedBox(height: 8),
-                    ElevatedButton(
-                      onPressed: _declineConnection,
-                      child: Text('Decline Connection'),
-                    ),
-                  ],
-                ) else if (_isConnected && _isConnectionAccepted) Column(
-                  children: [
-                    Text('Connected with $_patientName'),
-                    SizedBox(height: 8),
-                    ElevatedButton(
-                      onPressed: _startDataTransmission,
-                      child: Text('Start'),
-                    ),
-                    SizedBox(height: 8),
-                    ElevatedButton(
-                      onPressed: _stopDataTransmission,
-                      child: Text('Stop'),
-                    ),
-                    SizedBox(height: 16),
-                    // 그래프 추가
-                    _buildChart(),
-                  ],
-                ) else Container(
-                  child: Text(_isConnected
-                      ? 'Waiting for connection request...'
-                      : 'Disconnected from the server.'),
-                ),
+                if (_isConnected && _isConnectionRequested)
+                  Column(
+                    children: [
+                      Text('Connect with $_patientName?'),
+                      SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: _acceptConnection,
+                        child: Text('Accept Connection'),
+                      ),
+                      SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: _declineConnection,
+                        child: Text('Decline Connection'),
+                      ),
+                    ],
+                  )
+                else if (_isConnected && _isConnectionAccepted)
+                  Column(
+                    children: [
+                      Text('Connected with $_patientName'),
+                      SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: _startDataTransmission,
+                        child: Text('Start'),
+                      ),
+                      SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: _stopDataTransmission,
+                        child: Text('Stop'),
+                      ),
+                      SizedBox(height: 16),
+                      if (_dataStreamController1 != null &&
+                          _dataStreamController2 != null)
+                        StreamBuilder<List<FlSpot>>(
+                          stream: _dataStreamController1!.stream,
+                          builder: (context, snapshot1) {
+                            return StreamBuilder<List<FlSpot>>(
+                              stream: _dataStreamController2!.stream,
+                              builder: (context, snapshot2) {
+                                if (snapshot1.hasData && snapshot2.hasData) {
+                                  return _buildChart(
+                                    snapshot1.data!,
+                                    snapshot2.data!,
+                                  );
+                                } else {
+                                  return CircularProgressIndicator();
+                                }
+                              },
+                            );
+                          },
+                        ),
+                    ],
+                  )
+                else
+                  Container(
+                    child: Text(_isConnected
+                        ? 'Waiting for connection request...'
+                        : 'Disconnected from the server.'),
+                  ),
               ],
             ),
           ),
@@ -200,33 +255,46 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  // 그래프 빌드 메소드
-  Widget _buildChart() {
+  Widget _buildChart(
+      List<FlSpot> dataPoints1, List<FlSpot> dataPoints2) {
     return Container(
       height: 300,
       child: LineChart(
         LineChartData(
           gridData: FlGridData(show: true),
-          titlesData: FlTitlesData(show: true),
+          titlesData: FlTitlesData(
+            bottomTitles: SideTitles(
+              showTitles: true,
+              getTitles: (value) {
+                final int index = value.toInt();
+                if (index < 0 || index >= _timeLabels.length) {
+                  return '';
+                }
+                return _timeLabels[index];
+              },
+              reservedSize: 22,
+              margin: 8,
+            ),
+          ),
           borderData: FlBorderData(show: true),
           lineBarsData: [
             LineChartBarData(
-              spots: _dataPoints1,
+              spots: dataPoints1,
               isCurved: true,
               colors: [Colors.blue],
               barWidth: 4,
               isStrokeCapRound: true,
             ),
             LineChartBarData(
-              spots: _dataPoints2,
+              spots: dataPoints2,
               isCurved: true,
               colors: [Colors.red],
               barWidth: 4,
               isStrokeCapRound: true,
             ),
           ],
-          minX: _dataPoints1.isNotEmpty ? _dataPoints1.first.x : 0,
-          maxX: _dataPoints1.isNotEmpty ? _dataPoints1.last.x : 20,
+          minX: dataPoints1.isNotEmpty ? dataPoints1.first.x : 0,
+          maxX: dataPoints1.isNotEmpty ? dataPoints1.last.x : _maxDataPoints.toDouble(),
           minY: 0,
           maxY: 100,
         ),
