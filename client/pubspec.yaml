@@ -19,7 +19,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ">=2.12.0 <3.0.0"
+  sdk: ">=2.17.0 <3.0.0"
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -31,12 +31,38 @@ dependencies:
   flutter:
     sdk: flutter
   socket_io_client: ^2.0.1
-  fl_chart: ^0.35.0
-  intl: ^0.17.0  # 최신 버전을 사용하고 싶다면 이 라인을 추가하세요.
+  fl_chart: ^0.69.0
+  # intl: ^0.18.1  # 최신 버전을 사용하고 싶다면 이 라인을 추가하세요.
+  
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  url_launcher: ^6.1.0
+  path_provider: ^2.0.1
+  path_provider_foundation: ^2.1.0
+  desktop_window: 0.4.0
+  intl: '>=0.18.1 <0.20.0'
+  
+  syncfusion_flutter_charts: ^26.2.14
+  syncfusion_flutter_barcodes: ^26.2.14
+  syncfusion_flutter_calendar: ^26.2.14
+  syncfusion_flutter_core: ^26.2.14
+  syncfusion_flutter_datagrid: ^26.2.14
+  syncfusion_flutter_datagrid_export: ^26.2.14
+  syncfusion_flutter_datepicker: ^26.2.14
+  syncfusion_flutter_gauges: ^26.2.14
+  syncfusion_flutter_maps: ^26.2.14
+  syncfusion_flutter_pdf: ^26.2.14
+  syncfusion_flutter_pdfviewer: ^26.2.14
+  syncfusion_flutter_signaturepad: ^26.2.14
+  syncfusion_flutter_sliders: ^26.2.14
+  syncfusion_flutter_treemap: ^26.2.14
+  syncfusion_flutter_xlsio: ^26.2.14
+  syncfusion_localizations: ^26.2.14
+  syncfusion_officechart: ^26.2.14
+  syncfusion_officecore: ^26.2.14
+  
 
 dev_dependencies:
   flutter_test:
