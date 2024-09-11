@@ -325,11 +325,166 @@
 // }
 
 // -------------------------------------------------------------------------------------
-import 'dart:math';
+
+// import 'dart:math';
+// import 'package:flutter/material.dart';
+// import 'package:syncfusion_flutter_charts/charts.dart';
+// import 'package:syncfusion_flutter_core/core.dart';
+// import 'package:syncfusion_flutter_sliders/sliders.dart';
+
+// void main() {
+//   runApp(MyApp());
+// }
+
+// class MyApp extends StatelessWidget {
+//   @override
+//   Widget build(BuildContext context) {
+//     return MaterialApp(
+//       title: 'Range Selector Chart',
+//       theme: ThemeData(
+//         primarySwatch: Colors.blue,
+//       ),
+//       home: RangeSelectorChart(),
+//     );
+//   }
+// }
+
+// class RangeSelectorChart extends StatefulWidget {
+//   @override
+//   _RangeSelectorChartState createState() => _RangeSelectorChartState();
+// }
+
+// class _RangeSelectorChartState extends State<RangeSelectorChart> {
+//   List<ChartSampleData> chartData = <ChartSampleData>[];
+//   late RangeController rangeController;
+//   late double rangeLength;
+
+//   @override
+//   void initState() {
+//     super.initState();
+//     // 차트 데이터 생성
+//     for (int i = 0; i < 365; i++) {
+//       chartData.add(ChartSampleData(
+//           x: DateTime(2017, 1, 1).add(Duration(days: i)),
+//           y: 0.95 - i * 0.0005 + Random().nextDouble() * 0.02));
+//     }
+
+//     // RangeController 초기화
+//     rangeController = RangeController(
+//       start: DateTime(2017, 5, 1),
+//       end: DateTime(2017, 9, 1),
+//     );
+
+//     // 현재 범위의 길이 저장
+//     rangeLength =
+//         rangeController.end.difference(rangeController.start).inDays.toDouble();
+//   }
+
+//   @override
+//   void dispose() {
+//     rangeController.dispose();
+//     super.dispose();
+//   }
+
+//   @override
+//   Widget build(BuildContext context) {
+//     return Scaffold(
+//       appBar: AppBar(
+//         title: Text("Range Selector Chart"),
+//       ),
+//       body: Column(
+//         children: [
+//           // 상단 메인 그래프
+//           Expanded(
+//             flex: 3,
+//             child: SfCartesianChart(
+//               title: ChartTitle(text: 'EUR Exchange Rate From USD 2017'),
+//               primaryXAxis: DateTimeAxis(
+//                 minimum: DateTime(2017, 1, 1),
+//                 maximum: DateTime(2018, 1, 1),
+//                 rangeController: rangeController,
+//               ),
+//               primaryYAxis: NumericAxis(),
+//               series: <SplineSeries<ChartSampleData, DateTime>>[
+//                 SplineSeries<ChartSampleData, DateTime>(
+//                   dataSource: chartData,
+//                   xValueMapper: (ChartSampleData data, _) => data.x,
+//                   yValueMapper: (ChartSampleData data, _) => data.y,
+//                   color: const Color.fromRGBO(0, 193, 187, 1),
+//                 ),
+//               ],
+//             ),
+//           ),
+//           // 하단 기간 선택기
+//           Expanded(
+//             flex: 1,
+//             child: Padding(
+//               padding: const EdgeInsets.all(8.0),
+//               child: SfRangeSelector(
+//                 min: DateTime(2017, 1, 1),
+//                 max: DateTime(2018, 1, 1),
+//                 interval: 1,
+//                 dateIntervalType: DateIntervalType.months,
+//                 showTicks: true,
+//                 showLabels: true,
+//                 controller: rangeController,
+//                 onChanged: (SfRangeValues values) {
+//                   setState(() {
+//                     // 드래그한 만큼 범위를 전체적으로 이동
+//                     DateTime newStart = values.start as DateTime;
+//                     DateTime newEnd =
+//                         newStart.add(Duration(days: rangeLength.toInt()));
+
+//                     // 범위가 최대 또는 최소를 넘지 않도록 처리
+//                     if (newEnd.isAfter(DateTime(2018, 1, 1))) {
+//                       newEnd = DateTime(2018, 1, 1);
+//                       newStart =
+//                           newEnd.subtract(Duration(days: rangeLength.toInt()));
+//                     }
+
+//                     rangeController.start = newStart;
+//                     rangeController.end = newEnd;
+//                   });
+//                 },
+//                 child: Container(
+//                   height: 75,
+//                   child: SfCartesianChart(
+//                     primaryXAxis: DateTimeAxis(isVisible: false),
+//                     primaryYAxis: NumericAxis(isVisible: false),
+//                     series: <SplineAreaSeries<ChartSampleData, DateTime>>[
+//                       SplineAreaSeries<ChartSampleData, DateTime>(
+//                         dataSource: chartData,
+//                         xValueMapper: (ChartSampleData data, _) => data.x,
+//                         yValueMapper: (ChartSampleData data, _) => data.y,
+//                         borderColor: const Color.fromRGBO(0, 193, 187, 1),
+//                         color: const Color.fromRGBO(163, 226, 224, 1),
+//                         borderWidth: 1,
+//                       ),
+//                     ],
+//                   ),
+//                 ),
+//               ),
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+// }
+
+// class ChartSampleData {
+//   ChartSampleData({required this.x, required this.y});
+//   final DateTime x;
+//   final double y;
+// }
+
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:syncfusion_flutter_core/core.dart';
 import 'package:syncfusion_flutter_sliders/sliders.dart';
+import 'package:intl/intl.dart';
 
 void main() {
   runApp(MyApp());
@@ -339,72 +494,224 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Range Selector Chart',
+      title: 'Counselor Dashboard',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: RangeSelectorChart(),
+      home: MyHomePage(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
 
-class RangeSelectorChart extends StatefulWidget {
+class MyHomePage extends StatefulWidget {
   @override
-  _RangeSelectorChartState createState() => _RangeSelectorChartState();
+  _MyHomePageState createState() => _MyHomePageState();
 }
 
-class _RangeSelectorChartState extends State<RangeSelectorChart> {
-  List<ChartSampleData> chartData = <ChartSampleData>[];
+class _MyHomePageState extends State<MyHomePage> {
+  IO.Socket? socket;
+  bool _isConnected = false;
+  bool _isConnectionRequested = false;
+  bool _isConnectionAccepted = false;
+  String _patientName = '';
+
+  List<ChartSampleData> chartData1 = <ChartSampleData>[];
+  List<ChartSampleData> chartData2 = <ChartSampleData>[];
+
   late RangeController rangeController;
+  DateTime _currentDate = DateTime(2017, 1, 1);
+  final DateTime _minDate = DateTime(2017, 1, 1);
+  final DateTime _maxDate = DateTime(2018, 1, 1);
+  late double initialRangeLength;
 
   @override
   void initState() {
     super.initState();
-    // 차트 데이터 생성
-    for (int i = 0; i < 365; i++) {
-      chartData.add(ChartSampleData(
-          x: DateTime(2017, 1, 1).add(Duration(days: i)),
-          y: 0.95 - i * 0.0005 + Random().nextDouble() * 0.02));
-    }
 
     // RangeController 초기화
     rangeController = RangeController(
       start: DateTime(2017, 5, 1),
       end: DateTime(2017, 9, 1),
     );
+
+    // 초기 범위 길이 설정
+    initialRangeLength =
+        rangeController.end.difference(rangeController.start).inDays.toDouble();
+
+    // WebSocket 연결
+    _connectWebSocket();
   }
 
   @override
   void dispose() {
     rangeController.dispose();
+    socket?.disconnect();
     super.dispose();
+  }
+
+  // WebSocket 연결 및 데이터 처리
+  void _connectWebSocket() {
+    socket = IO.io(
+      'ws://192.168.0.72:5000',
+      IO.OptionBuilder()
+          .setTransports(['websocket'])
+          .enableAutoConnect()
+          .enableForceNew()
+          .setExtraHeaders({'Upgrade': 'websocket'})
+          .build(),
+    );
+
+    socket!.onConnect((_) {
+      setState(() {
+        _isConnected = true;
+      });
+      print('Connected to the server');
+      socket!.emit('counselor_login', {'counselor_id': '1'});
+    });
+
+    socket!.onDisconnect((_) {
+      setState(() {
+        _isConnected = false;
+        _isConnectionRequested = false;
+        _isConnectionAccepted = false;
+      });
+      print('Disconnected from the server');
+    });
+
+    socket!.on('connection_request', (data) {
+      setState(() {
+        _isConnectionRequested = true;
+        _patientName = data['message'];
+      });
+    });
+
+    socket!.on('data_update', (data) {
+      double newData1 = double.parse(data['data1'].toString());
+      double newData2 = double.parse(data['data2'].toString());
+      _updateChartData(newData1, newData2);
+    });
+
+    socket!.on('connection_accepted', (data) {
+      setState(() {
+        _isConnectionRequested = false;
+        _isConnectionAccepted = true;
+      });
+      print('Connection accepted: $data');
+    });
+
+    socket!.connect();
+  }
+
+  // 차트 데이터 업데이트
+  void _updateChartData(double data1, double data2) {
+    setState(() {
+      chartData1.add(ChartSampleData(x: _currentDate, y: data1));
+      chartData2.add(ChartSampleData(x: _currentDate, y: data2));
+
+      _currentDate = _currentDate.add(Duration(days: 1));
+
+      // 데이터가 365개를 넘으면 오래된 데이터 삭제
+      if (chartData1.length > 365) {
+        chartData1.removeAt(0);
+        chartData2.removeAt(0);
+      }
+    });
+  }
+
+  void _startDataTransmission() {
+    setState(() {
+      chartData1.clear();
+      chartData2.clear();
+      _currentDate = DateTime(2017, 1, 1); // 날짜 초기화
+    });
+
+    if (socket != null && socket!.connected) {
+      socket!.emit('start');
+    }
+  }
+
+  void _stopDataTransmission() {
+    if (socket != null && socket!.connected) {
+      socket!.emit('stop');
+      socket!.off('data_update');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Range Selector Chart"),
+        title: Text("Counselor Dashboard"),
       ),
       body: Column(
         children: [
+          if (_isConnected && _isConnectionRequested)
+            Column(
+              children: [
+                Text('Connect with $_patientName?'),
+                SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: () {
+                    if (socket != null && socket!.connected) {
+                      socket!.emit('accept_connection');
+                    }
+                  },
+                  child: Text('Accept Connection'),
+                ),
+                SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: () {
+                    if (socket != null && socket!.connected) {
+                      socket!.emit('decline_connection');
+                      setState(() {
+                        _isConnectionRequested = false;
+                      });
+                    }
+                  },
+                  child: Text('Decline Connection'),
+                ),
+              ],
+            )
+          else if (_isConnected && _isConnectionAccepted)
+            Column(
+              children: [
+                Text('Connected with $_patientName'),
+                SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: _startDataTransmission,
+                  child: Text('Start Data Transmission'),
+                ),
+                SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: _stopDataTransmission,
+                  child: Text('Stop Data Transmission'),
+                ),
+              ],
+            ),
           // 상단 메인 그래프
           Expanded(
             flex: 3,
             child: SfCartesianChart(
-              title: ChartTitle(text: 'EUR Exchange Rate From USD 2017'),
+              title: ChartTitle(text: 'Real-time Data Chart'),
               primaryXAxis: DateTimeAxis(
-                minimum: DateTime(2017, 1, 1),
-                maximum: DateTime(2018, 1, 1),
+                minimum: _minDate,
+                maximum: _maxDate,
                 rangeController: rangeController,
               ),
               primaryYAxis: NumericAxis(),
               series: <SplineSeries<ChartSampleData, DateTime>>[
                 SplineSeries<ChartSampleData, DateTime>(
-                  dataSource: chartData,
+                  dataSource: chartData1,
                   xValueMapper: (ChartSampleData data, _) => data.x,
                   yValueMapper: (ChartSampleData data, _) => data.y,
-                  color: const Color.fromRGBO(0, 193, 187, 1),
+                  color: Colors.blue,
+                ),
+                SplineSeries<ChartSampleData, DateTime>(
+                  dataSource: chartData2,
+                  xValueMapper: (ChartSampleData data, _) => data.x,
+                  yValueMapper: (ChartSampleData data, _) => data.y,
+                  color: Colors.red,
                 ),
               ],
             ),
@@ -415,15 +722,35 @@ class _RangeSelectorChartState extends State<RangeSelectorChart> {
             child: Padding(
               padding: const EdgeInsets.all(8.0),
               child: SfRangeSelector(
-                min: DateTime(2017, 1, 1),
-                max: DateTime(2018, 1, 1),
+                min: _minDate,
+                max: _maxDate,
                 interval: 1,
                 dateIntervalType: DateIntervalType.months,
                 showTicks: true,
                 showLabels: true,
                 controller: rangeController,
                 onChanged: (SfRangeValues values) {
-                  setState(() {});
+                  setState(() {
+                    DateTime newStart = values.start as DateTime;
+                    DateTime newEnd = newStart
+                        .add(Duration(days: initialRangeLength.toInt()));
+
+                    if (newEnd.isAfter(_maxDate)) {
+                      newEnd = _maxDate;
+                      newStart = newEnd
+                          .subtract(Duration(days: initialRangeLength.toInt()));
+                    }
+
+                    rangeController.start = newStart;
+                    rangeController.end = newEnd;
+                  });
+                },
+                onChangeStart: (SfRangeValues values) {
+                  // 사용자가 드래그를 시작할 때 현재 범위의 길이를 저장
+                  initialRangeLength = rangeController.end
+                      .difference(rangeController.start)
+                      .inDays
+                      .toDouble();
                 },
                 child: Container(
                   height: 75,
@@ -432,11 +759,19 @@ class _RangeSelectorChartState extends State<RangeSelectorChart> {
                     primaryYAxis: NumericAxis(isVisible: false),
                     series: <SplineAreaSeries<ChartSampleData, DateTime>>[
                       SplineAreaSeries<ChartSampleData, DateTime>(
-                        dataSource: chartData,
+                        dataSource: chartData1,
                         xValueMapper: (ChartSampleData data, _) => data.x,
                         yValueMapper: (ChartSampleData data, _) => data.y,
-                        borderColor: const Color.fromRGBO(0, 193, 187, 1),
-                        color: const Color.fromRGBO(163, 226, 224, 1),
+                        borderColor: Colors.blue,
+                        color: Colors.lightBlue.withOpacity(0.3),
+                        borderWidth: 1,
+                      ),
+                      SplineAreaSeries<ChartSampleData, DateTime>(
+                        dataSource: chartData2,
+                        xValueMapper: (ChartSampleData data, _) => data.x,
+                        yValueMapper: (ChartSampleData data, _) => data.y,
+                        borderColor: Colors.red,
+                        color: Colors.red.withOpacity(0.3),
                         borderWidth: 1,
                       ),
                     ],
