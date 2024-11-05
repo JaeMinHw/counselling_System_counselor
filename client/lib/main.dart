@@ -40,24 +40,17 @@ class _MyHomePageState extends State<MyHomePage> {
   List<ChartSampleData> chartData2 = <ChartSampleData>[];
 
   late RangeController rangeController;
-  DateTime _currentDate = DateTime(2017, 1, 1);
-  final DateTime _minDate = DateTime(2017, 1, 1);
-  final DateTime _maxDate = DateTime(2018, 1, 1);
-  late double initialRangeLength;
+  DateTime _currentDate = DateTime.now();
+  bool _isStreaming = false; // 데이터를 스트리밍 중인지 확인하는 플래그
 
   @override
   void initState() {
     super.initState();
 
-    // RangeController 초기화
     rangeController = RangeController(
-      start: DateTime(2017, 5, 1),
-      end: DateTime(2017, 9, 1),
+      start: DateTime.now().subtract(Duration(seconds: 5)),
+      end: DateTime.now(),
     );
-
-    // 초기 범위 길이 설정
-    initialRangeLength =
-        rangeController.end.difference(rangeController.start).inDays.toDouble();
   }
 
   @override
@@ -67,8 +60,9 @@ class _MyHomePageState extends State<MyHomePage> {
     super.dispose();
   }
 
-  // WebSocket 연결 및 데이터 처리
   void _connectWebSocket() {
+    debugPrint("Attempting to connect to WebSocket...");
+
     socket = IO.io(
       'ws://218.151.124.83:5000',
       IO.OptionBuilder()
@@ -83,7 +77,7 @@ class _MyHomePageState extends State<MyHomePage> {
       setState(() {
         _isConnected = true;
       });
-      print('Connected to the server');
+      debugPrint('Connected to the server');
       socket!.emit('counselor_login', {'counselor_id': '1'});
     });
 
@@ -93,7 +87,7 @@ class _MyHomePageState extends State<MyHomePage> {
         _isConnectionRequested = false;
         _isConnectionAccepted = false;
       });
-      print('Disconnected from the server');
+      debugPrint('Disconnected from the server');
     });
 
     socket!.on('connection_request', (data) {
@@ -101,6 +95,7 @@ class _MyHomePageState extends State<MyHomePage> {
         _isConnectionRequested = true;
         _patientName = data['message'];
       });
+      debugPrint('Connection requested by patient: $_patientName');
     });
 
     socket!.on('connection_accepted', (data) {
@@ -108,62 +103,70 @@ class _MyHomePageState extends State<MyHomePage> {
         _isConnectionRequested = false;
         _isConnectionAccepted = true;
       });
-      print('Connection accepted: $data');
+      debugPrint('Connection accepted by server');
     });
 
-    // 데이터 업데이트 이벤트 리스너 설정
     _setUpDataUpdateListener();
-
     socket!.connect();
   }
 
   void _setUpDataUpdateListener() {
-    // 새로운 데이터 업데이트 리스너 설정
+    socket!.off('data_update'); // 기존 리스너 제거
     socket!.on('data_update', (data) {
-      double newData1 = double.parse(data['data1'].toString());
-      double newData2 = double.parse(data['data2'].toString());
-      _updateChartData(newData1, newData2);
+      if (_isStreaming) {
+        double newData1 = double.parse(data['data1'].toString());
+        double newData2 = double.parse(data['data2'].toString());
+        DateTime serverTime = data.containsKey('timestamp')
+            ? DateTime.parse(data['timestamp'])
+            : DateTime.now();
+        _updateChartData(newData1, newData2, serverTime);
+        debugPrint(
+            "Received data update: data1=$newData1, data2=$newData2, time=$serverTime");
+      }
     });
   }
 
-  // 차트 데이터 업데이트
-  void _updateChartData(double data1, double data2) {
+  void _updateChartData(double data1, double data2, DateTime time) {
     setState(() {
-      chartData1.add(ChartSampleData(x: _currentDate, y: data1));
-      chartData2.add(ChartSampleData(x: _currentDate, y: data2));
+      chartData1.add(ChartSampleData(x: time, y: data1));
+      chartData2.add(ChartSampleData(x: time, y: data2));
 
-      _currentDate = _currentDate.add(Duration(days: 1));
-
-      // 데이터가 1000개를 넘으면 오래된 데이터 삭제
       if (chartData1.length > 1000) {
         chartData1.removeAt(0);
         chartData2.removeAt(0);
       }
 
-      // 최신 데이터에 맞춰 x축 범위를 조절
-      rangeController.start = chartData1.first.x;
+      rangeController.start = chartData1.last.x.subtract(Duration(seconds: 5));
       rangeController.end = chartData1.last.x;
     });
   }
 
   void _startDataTransmission() {
     setState(() {
-      chartData1.clear();
-      chartData2.clear();
-      _currentDate = DateTime(2017, 1, 1); // 날짜 초기화
+      _isStreaming = true;
+      if (chartData1.isNotEmpty) {
+        _currentDate = chartData1.last.x; // 마지막 시간으로 초기화
+      }
     });
 
+    _setUpDataUpdateListener();
     if (socket != null && socket!.connected) {
-      // `data_update` 리스너를 다시 설정
-      _setUpDataUpdateListener();
-      socket!.emit('start'); // 서버로 start 이벤트 전송
+      socket!.emit('start');
+      debugPrint("Data transmission started");
     }
   }
 
   void _stopDataTransmission() {
     if (socket != null && socket!.connected) {
-      socket!.emit('stop'); // 서버로 stop 이벤트 전송
-      socket!.off('data_update'); // 데이터 업데이트 이벤트만 해제
+      setState(() {
+        _isStreaming = false;
+        DateTime stopTime = DateTime.now();
+        chartData1.add(ChartSampleData(x: stopTime, y: 0));
+        chartData2.add(ChartSampleData(x: stopTime, y: 0));
+      });
+      socket!.emit('stop');
+      socket!.off('data_update');
+      debugPrint("Data transmission stopped");
     }
   }
 
@@ -225,15 +228,14 @@ class _MyHomePageState extends State<MyHomePage> {
                 ),
               ],
             ),
-          // 상단 메인 그래프
           Expanded(
             flex: 3,
             child: SfCartesianChart(
               title: ChartTitle(text: 'Real-time Data Chart'),
               primaryXAxis: DateTimeAxis(
-                minimum: _minDate,
-                maximum: _maxDate,
                 rangeController: rangeController,
+                dateFormat: DateFormat('HH:mm:ss'),
+                intervalType: DateTimeIntervalType.seconds,
               ),
               primaryYAxis: NumericAxis(),
               series: <SplineSeries<ChartSampleData, DateTime>>[
@@ -252,29 +254,25 @@ class _MyHomePageState extends State<MyHomePage> {
               ],
             ),
           ),
-          // 하단 기간 선택기
           Expanded(
             flex: 1,
             child: Padding(
               padding: const EdgeInsets.all(8.0),
               child: SfRangeSelector(
-                min: _minDate,
-                max: _maxDate,
+                min: chartData1.isNotEmpty
+                    ? chartData1.first.x
+                    : DateTime.now().subtract(Duration(seconds: 5)),
+                max: chartData1.isNotEmpty ? chartData1.last.x : DateTime.now(),
                 interval: 1,
-                dateIntervalType: DateIntervalType.months,
+                dateIntervalType: DateIntervalType.seconds,
                 showTicks: true,
                 showLabels: true,
                 controller: rangeController,
                 dragMode: SliderDragMode.both,
                 onChanged: (SfRangeValues values) {
                   setState(() {
-                    Duration rangeDuration =
-                        rangeController.end.difference(rangeController.start);
-
-                    // 새로운 시작과 끝 값을 기반으로 비율 유지
                     DateTime newStart = values.start as DateTime;
-                    DateTime newEnd = newStart.add(rangeDuration);
-
+                    DateTime newEnd = values.end as DateTime;
                     rangeController.start = newStart;
                     rangeController.end = newEnd;
                   });
@@ -282,7 +280,10 @@ class _MyHomePageState extends State<MyHomePage> {
                 child: Container(
                   height: 75,
                   child: SfCartesianChart(
-                    primaryXAxis: DateTimeAxis(isVisible: false),
+                    primaryXAxis: DateTimeAxis(
+                      dateFormat: DateFormat('HH:mm:ss'),
+                      intervalType: DateTimeIntervalType.seconds,
+                    ),
                     primaryYAxis: NumericAxis(isVisible: false),
                     series: <SplineAreaSeries<ChartSampleData, DateTime>>[
                       SplineAreaSeries<ChartSampleData, DateTime>(
