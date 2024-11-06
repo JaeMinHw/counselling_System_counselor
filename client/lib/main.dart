@@ -42,10 +42,18 @@ class _MyHomePageState extends State<MyHomePage> {
   late RangeController rangeController;
   DateTime _currentDate = DateTime.now();
   bool _isStreaming = false; // 데이터를 스트리밍 중인지 확인하는 플래그
+  late ZoomPanBehavior _zoomPanBehavior;
 
   @override
   void initState() {
     super.initState();
+
+    _zoomPanBehavior = ZoomPanBehavior(
+        enablePinching: true,
+        enableDoubleTapZooming: true,
+        enableSelectionZooming: true,
+        selectionRectBorderWidth: 2,
+        enablePanning: true);
 
     rangeController = RangeController(
       start: DateTime.now().subtract(Duration(seconds: 5)),
@@ -261,7 +269,7 @@ class _MyHomePageState extends State<MyHomePage> {
               child: SfRangeSelector(
                 min: chartData1.isNotEmpty
                     ? chartData1.first.x
-                    : DateTime.now().subtract(Duration(seconds: 5)),
+                    : DateTime.now().subtract(Duration(seconds: 100)),
                 max: chartData1.isNotEmpty ? chartData1.last.x : DateTime.now(),
                 interval: 1,
                 dateIntervalType: DateIntervalType.seconds,
@@ -277,33 +285,31 @@ class _MyHomePageState extends State<MyHomePage> {
                     rangeController.end = newEnd;
                   });
                 },
-                child: Container(
-                  height: 75,
-                  child: SfCartesianChart(
-                    primaryXAxis: DateTimeAxis(
-                      dateFormat: DateFormat('HH:mm:ss'),
-                      intervalType: DateTimeIntervalType.seconds,
-                    ),
-                    primaryYAxis: NumericAxis(isVisible: false),
-                    series: <SplineAreaSeries<ChartSampleData, DateTime>>[
-                      SplineAreaSeries<ChartSampleData, DateTime>(
-                        dataSource: chartData1,
-                        xValueMapper: (ChartSampleData data, _) => data.x,
-                        yValueMapper: (ChartSampleData data, _) => data.y,
-                        borderColor: Colors.blue,
-                        color: Colors.lightBlue.withOpacity(0.3),
-                        borderWidth: 1,
-                      ),
-                      SplineAreaSeries<ChartSampleData, DateTime>(
-                        dataSource: chartData2,
-                        xValueMapper: (ChartSampleData data, _) => data.x,
-                        yValueMapper: (ChartSampleData data, _) => data.y,
-                        borderColor: Colors.red,
-                        color: Colors.red.withOpacity(0.3),
-                        borderWidth: 1,
-                      ),
-                    ],
+                child: SfCartesianChart(
+                  primaryXAxis: DateTimeAxis(
+                    intervalType: DateTimeIntervalType.seconds,
+                    rangeController:
+                        rangeController, // RangeController를 통해 표시 범위 설정
                   ),
+                  primaryYAxis: NumericAxis(isVisible: false),
+                  series: <SplineAreaSeries<ChartSampleData, DateTime>>[
+                    SplineAreaSeries<ChartSampleData, DateTime>(
+                      dataSource: chartData1,
+                      xValueMapper: (ChartSampleData data, _) => data.x,
+                      yValueMapper: (ChartSampleData data, _) => data.y,
+                      borderColor: Colors.blue,
+                      color: Colors.lightBlue.withOpacity(0.3),
+                      borderWidth: 1,
+                    ),
+                    SplineAreaSeries<ChartSampleData, DateTime>(
+                      dataSource: chartData2,
+                      xValueMapper: (ChartSampleData data, _) => data.x,
+                      yValueMapper: (ChartSampleData data, _) => data.y,
+                      borderColor: Colors.red,
+                      color: Colors.red.withOpacity(0.3),
+                      borderWidth: 1,
+                    ),
+                  ],
                 ),
               ),
             ),
