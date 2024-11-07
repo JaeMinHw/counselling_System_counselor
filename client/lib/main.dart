@@ -35,6 +35,7 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _isConnectionRequested = false;
   bool _isConnectionAccepted = false;
   String _patientName = '';
+  bool _isLineChart = true; // 그래프 유형 상태 변수
 
   List<ChartSampleData> chartData1 = <ChartSampleData>[];
   List<ChartSampleData> chartData2 = <ChartSampleData>[];
@@ -178,11 +179,56 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  List<CartesianSeries<dynamic, dynamic>> _getChartSeries() {
+    if (_isLineChart) {
+      return <LineSeries<dynamic, dynamic>>[
+        LineSeries<ChartSampleData, DateTime>(
+          dataSource: chartData1,
+          xValueMapper: (ChartSampleData data, _) => data.x,
+          yValueMapper: (ChartSampleData data, _) => data.y,
+          color: Colors.blue,
+        ),
+        LineSeries<ChartSampleData, DateTime>(
+          dataSource: chartData2,
+          xValueMapper: (ChartSampleData data, _) => data.x,
+          yValueMapper: (ChartSampleData data, _) => data.y,
+          color: Colors.red,
+        ),
+      ];
+    } else {
+      return <SplineSeries<dynamic, dynamic>>[
+        SplineSeries<ChartSampleData, DateTime>(
+          dataSource: chartData1,
+          xValueMapper: (ChartSampleData data, _) => data.x,
+          yValueMapper: (ChartSampleData data, _) => data.y,
+          color: Colors.blue,
+        ),
+        SplineSeries<ChartSampleData, DateTime>(
+          dataSource: chartData2,
+          xValueMapper: (ChartSampleData data, _) => data.x,
+          yValueMapper: (ChartSampleData data, _) => data.y,
+          color: Colors.red,
+        ),
+      ];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text("Counselor Dashboard"),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.swap_horiz, color: Colors.black),
+            onPressed: () {
+              setState(() {
+                _isLineChart = !_isLineChart;
+              });
+            },
+            tooltip: _isLineChart ? "Switch to Curve" : "Switch to Line",
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -246,20 +292,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 intervalType: DateTimeIntervalType.seconds,
               ),
               primaryYAxis: NumericAxis(),
-              series: <SplineSeries<ChartSampleData, DateTime>>[
-                SplineSeries<ChartSampleData, DateTime>(
-                  dataSource: chartData1,
-                  xValueMapper: (ChartSampleData data, _) => data.x,
-                  yValueMapper: (ChartSampleData data, _) => data.y,
-                  color: Colors.blue,
-                ),
-                SplineSeries<ChartSampleData, DateTime>(
-                  dataSource: chartData2,
-                  xValueMapper: (ChartSampleData data, _) => data.x,
-                  yValueMapper: (ChartSampleData data, _) => data.y,
-                  color: Colors.red,
-                ),
-              ],
+              series: _getChartSeries(), // 동적 시리즈 생성
             ),
           ),
           Expanded(
@@ -288,32 +321,14 @@ class _MyHomePageState extends State<MyHomePage> {
                 child: SfCartesianChart(
                   primaryXAxis: DateTimeAxis(
                     intervalType: DateTimeIntervalType.seconds,
-                    rangeController:
-                        rangeController, // RangeController를 통해 표시 범위 설정
+                    rangeController: rangeController,
                   ),
                   primaryYAxis: NumericAxis(isVisible: false),
-                  series: <SplineAreaSeries<ChartSampleData, DateTime>>[
-                    SplineAreaSeries<ChartSampleData, DateTime>(
-                      dataSource: chartData1,
-                      xValueMapper: (ChartSampleData data, _) => data.x,
-                      yValueMapper: (ChartSampleData data, _) => data.y,
-                      borderColor: Colors.blue,
-                      color: Colors.lightBlue.withOpacity(0.3),
-                      borderWidth: 1,
-                    ),
-                    SplineAreaSeries<ChartSampleData, DateTime>(
-                      dataSource: chartData2,
-                      xValueMapper: (ChartSampleData data, _) => data.x,
-                      yValueMapper: (ChartSampleData data, _) => data.y,
-                      borderColor: Colors.red,
-                      color: Colors.red.withOpacity(0.3),
-                      borderWidth: 1,
-                    ),
-                  ],
+                  series: _getChartSeries(), // 동적 시리즈 생성
                 ),
               ),
             ),
-          )
+          ),
         ],
       ),
     );
