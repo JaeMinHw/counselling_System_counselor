@@ -39,6 +39,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   List<ChartSampleData> chartData1 = <ChartSampleData>[];
   List<ChartSampleData> chartData2 = <ChartSampleData>[];
+  List<ChartSampleData> chartData3 = <ChartSampleData>[];
 
   late RangeController rangeController;
   DateTime _currentDate = DateTime.now();
@@ -125,24 +126,28 @@ class _MyHomePageState extends State<MyHomePage> {
       if (_isStreaming) {
         double newData1 = double.parse(data['data1'].toString());
         double newData2 = double.parse(data['data2'].toString());
+        double newData3 = double.parse(data['data3'].toString());
         DateTime serverTime = data.containsKey('timestamp')
             ? DateTime.parse(data['timestamp'])
             : DateTime.now();
-        _updateChartData(newData1, newData2, serverTime);
+        _updateChartData(newData1, newData2, newData3, serverTime);
         debugPrint(
-            "Received data update: data1=$newData1, data2=$newData2, time=$serverTime");
+            "Received data update: data1=$newData1, data2=$newData2, data3=$newData3, time=$serverTime");
       }
     });
   }
 
-  void _updateChartData(double data1, double data2, DateTime time) {
+  void _updateChartData(
+      double data1, double data2, double data3, DateTime time) {
     setState(() {
       chartData1.add(ChartSampleData(x: time, y: data1));
       chartData2.add(ChartSampleData(x: time, y: data2));
+      chartData3.add(ChartSampleData(x: time, y: data3));
 
       if (chartData1.length > 1000) {
         chartData1.removeAt(0);
         chartData2.removeAt(0);
+        chartData3.removeAt(0);
       }
 
       rangeController.start = chartData1.last.x.subtract(Duration(seconds: 5));
@@ -172,44 +177,11 @@ class _MyHomePageState extends State<MyHomePage> {
         DateTime stopTime = DateTime.now();
         chartData1.add(ChartSampleData(x: stopTime, y: 0));
         chartData2.add(ChartSampleData(x: stopTime, y: 0));
+        chartData3.add(ChartSampleData(x: stopTime, y: 0));
       });
       socket!.emit('stop');
       socket!.off('data_update');
       debugPrint("Data transmission stopped");
-    }
-  }
-
-  List<CartesianSeries<dynamic, dynamic>> _getChartSeries() {
-    if (_isLineChart) {
-      return <LineSeries<dynamic, dynamic>>[
-        LineSeries<ChartSampleData, DateTime>(
-          dataSource: chartData1,
-          xValueMapper: (ChartSampleData data, _) => data.x,
-          yValueMapper: (ChartSampleData data, _) => data.y,
-          color: Colors.blue,
-        ),
-        LineSeries<ChartSampleData, DateTime>(
-          dataSource: chartData2,
-          xValueMapper: (ChartSampleData data, _) => data.x,
-          yValueMapper: (ChartSampleData data, _) => data.y,
-          color: Colors.red,
-        ),
-      ];
-    } else {
-      return <SplineSeries<dynamic, dynamic>>[
-        SplineSeries<ChartSampleData, DateTime>(
-          dataSource: chartData1,
-          xValueMapper: (ChartSampleData data, _) => data.x,
-          yValueMapper: (ChartSampleData data, _) => data.y,
-          color: Colors.blue,
-        ),
-        SplineSeries<ChartSampleData, DateTime>(
-          dataSource: chartData2,
-          xValueMapper: (ChartSampleData data, _) => data.x,
-          yValueMapper: (ChartSampleData data, _) => data.y,
-          color: Colors.red,
-        ),
-      ];
     }
   }
 
@@ -220,7 +192,7 @@ class _MyHomePageState extends State<MyHomePage> {
         title: Text("Counselor Dashboard"),
         actions: [
           IconButton(
-            icon: Icon(Icons.swap_horiz, color: Colors.black),
+            icon: Icon(Icons.swap_horiz, color: Colors.white),
             onPressed: () {
               setState(() {
                 _isLineChart = !_isLineChart;
@@ -282,19 +254,70 @@ class _MyHomePageState extends State<MyHomePage> {
                 ),
               ],
             ),
+          // 첫 번째 그래프 - chartData1만 사용
           Expanded(
-            flex: 3,
+            flex: 1,
             child: SfCartesianChart(
-              title: ChartTitle(text: 'Real-time Data Chart'),
+              title: ChartTitle(text: 'Data 1 Chart'),
               primaryXAxis: DateTimeAxis(
-                rangeController: rangeController,
                 dateFormat: DateFormat('HH:mm:ss'),
                 intervalType: DateTimeIntervalType.seconds,
+                rangeController: rangeController,
               ),
               primaryYAxis: NumericAxis(),
-              series: _getChartSeries(), // 동적 시리즈 생성
+              series: [
+                LineSeries<ChartSampleData, DateTime>(
+                  dataSource: chartData1,
+                  xValueMapper: (ChartSampleData data, _) => data.x,
+                  yValueMapper: (ChartSampleData data, _) => data.y,
+                  color: Colors.blue,
+                ),
+              ],
             ),
           ),
+          // 두 번째 그래프 - chartData2만 사용
+          Expanded(
+            flex: 1,
+            child: SfCartesianChart(
+              title: ChartTitle(text: 'Data 2 Chart'),
+              primaryXAxis: DateTimeAxis(
+                dateFormat: DateFormat('HH:mm:ss'),
+                intervalType: DateTimeIntervalType.seconds,
+                rangeController: rangeController,
+              ),
+              primaryYAxis: NumericAxis(),
+              series: [
+                LineSeries<ChartSampleData, DateTime>(
+                  dataSource: chartData2,
+                  xValueMapper: (ChartSampleData data, _) => data.x,
+                  yValueMapper: (ChartSampleData data, _) => data.y,
+                  color: Colors.red,
+                ),
+              ],
+            ),
+          ),
+          // 세 번째 그래프 - chartData3만 사용
+          Expanded(
+            flex: 1,
+            child: SfCartesianChart(
+              title: ChartTitle(text: 'Data 3 Chart'),
+              primaryXAxis: DateTimeAxis(
+                dateFormat: DateFormat('HH:mm:ss'),
+                intervalType: DateTimeIntervalType.seconds,
+                rangeController: rangeController,
+              ),
+              primaryYAxis: NumericAxis(),
+              series: [
+                LineSeries<ChartSampleData, DateTime>(
+                  dataSource: chartData3,
+                  xValueMapper: (ChartSampleData data, _) => data.x,
+                  yValueMapper: (ChartSampleData data, _) => data.y,
+                  color: Colors.green,
+                ),
+              ],
+            ),
+          ),
+          // 아래의 기간 선택기 그래프 - 모든 데이터를 포함
           Expanded(
             flex: 1,
             child: Padding(
@@ -302,10 +325,10 @@ class _MyHomePageState extends State<MyHomePage> {
               child: SfRangeSelector(
                 min: chartData1.isNotEmpty
                     ? chartData1.first.x
-                    : DateTime.now().subtract(Duration(seconds: 100)),
+                    : DateTime.now().subtract(Duration(seconds: 1000)),
                 max: chartData1.isNotEmpty ? chartData1.last.x : DateTime.now(),
                 interval: 1,
-                dateIntervalType: DateIntervalType.seconds,
+                dateIntervalType: DateIntervalType.seconds, // 여기를 수정
                 showTicks: true,
                 showLabels: true,
                 controller: rangeController,
@@ -324,7 +347,26 @@ class _MyHomePageState extends State<MyHomePage> {
                     rangeController: rangeController,
                   ),
                   primaryYAxis: NumericAxis(isVisible: false),
-                  series: _getChartSeries(), // 동적 시리즈 생성
+                  series: [
+                    LineSeries<ChartSampleData, DateTime>(
+                      dataSource: chartData1,
+                      xValueMapper: (ChartSampleData data, _) => data.x,
+                      yValueMapper: (ChartSampleData data, _) => data.y,
+                      color: Colors.blue,
+                    ),
+                    LineSeries<ChartSampleData, DateTime>(
+                      dataSource: chartData2,
+                      xValueMapper: (ChartSampleData data, _) => data.x,
+                      yValueMapper: (ChartSampleData data, _) => data.y,
+                      color: Colors.red,
+                    ),
+                    LineSeries<ChartSampleData, DateTime>(
+                      dataSource: chartData3,
+                      xValueMapper: (ChartSampleData data, _) => data.x,
+                      yValueMapper: (ChartSampleData data, _) => data.y,
+                      color: Colors.green,
+                    ),
+                  ],
                 ),
               ),
             ),
