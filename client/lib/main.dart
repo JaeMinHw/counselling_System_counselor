@@ -36,6 +36,12 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _isConnectionAccepted = false;
   String _patientName = '';
   bool _isLineChart = true; // 그래프 유형 상태 변수
+  int _currentIconIndex = 0; // 현재 아이콘 인덱스
+
+  final List<IconData> _icons = [
+    Icons.star,
+    Icons.auto_graph_rounded,
+  ];
 
   List<ChartSampleData> chartData1 = <ChartSampleData>[];
   List<ChartSampleData> chartData2 = <ChartSampleData>[];
@@ -192,9 +198,13 @@ class _MyHomePageState extends State<MyHomePage> {
         title: Text("Counselor Dashboard"),
         actions: [
           IconButton(
-            icon: Icon(Icons.swap_horiz, color: Colors.white),
+            icon: Icon(
+              _icons[_currentIconIndex],
+              color: Colors.black,
+            ),
             onPressed: () {
               setState(() {
+                _currentIconIndex = (_currentIconIndex + 1) % _icons.length;
                 _isLineChart = !_isLineChart;
               });
             },
@@ -265,14 +275,23 @@ class _MyHomePageState extends State<MyHomePage> {
                 rangeController: rangeController,
               ),
               primaryYAxis: NumericAxis(),
-              series: [
-                LineSeries<ChartSampleData, DateTime>(
-                  dataSource: chartData1,
-                  xValueMapper: (ChartSampleData data, _) => data.x,
-                  yValueMapper: (ChartSampleData data, _) => data.y,
-                  color: Colors.blue,
-                ),
-              ],
+              series: _isLineChart
+                  ? [
+                      LineSeries<ChartSampleData, DateTime>(
+                        dataSource: chartData1,
+                        xValueMapper: (ChartSampleData data, _) => data.x,
+                        yValueMapper: (ChartSampleData data, _) => data.y,
+                        color: Colors.blue,
+                      ),
+                    ]
+                  : [
+                      SplineSeries<ChartSampleData, DateTime>(
+                        dataSource: chartData1,
+                        xValueMapper: (ChartSampleData data, _) => data.x,
+                        yValueMapper: (ChartSampleData data, _) => data.y,
+                        color: Colors.blue,
+                      ),
+                    ],
             ),
           ),
           // 두 번째 그래프 - chartData2만 사용
@@ -286,14 +305,23 @@ class _MyHomePageState extends State<MyHomePage> {
                 rangeController: rangeController,
               ),
               primaryYAxis: NumericAxis(),
-              series: [
-                LineSeries<ChartSampleData, DateTime>(
-                  dataSource: chartData2,
-                  xValueMapper: (ChartSampleData data, _) => data.x,
-                  yValueMapper: (ChartSampleData data, _) => data.y,
-                  color: Colors.red,
-                ),
-              ],
+              series: _isLineChart
+                  ? [
+                      LineSeries<ChartSampleData, DateTime>(
+                        dataSource: chartData2,
+                        xValueMapper: (ChartSampleData data, _) => data.x,
+                        yValueMapper: (ChartSampleData data, _) => data.y,
+                        color: Colors.red,
+                      ),
+                    ]
+                  : [
+                      SplineSeries<ChartSampleData, DateTime>(
+                        dataSource: chartData2,
+                        xValueMapper: (ChartSampleData data, _) => data.x,
+                        yValueMapper: (ChartSampleData data, _) => data.y,
+                        color: Colors.red,
+                      ),
+                    ],
             ),
           ),
           // 세 번째 그래프 - chartData3만 사용
@@ -307,14 +335,23 @@ class _MyHomePageState extends State<MyHomePage> {
                 rangeController: rangeController,
               ),
               primaryYAxis: NumericAxis(),
-              series: [
-                LineSeries<ChartSampleData, DateTime>(
-                  dataSource: chartData3,
-                  xValueMapper: (ChartSampleData data, _) => data.x,
-                  yValueMapper: (ChartSampleData data, _) => data.y,
-                  color: Colors.green,
-                ),
-              ],
+              series: _isLineChart
+                  ? [
+                      LineSeries<ChartSampleData, DateTime>(
+                        dataSource: chartData3,
+                        xValueMapper: (ChartSampleData data, _) => data.x,
+                        yValueMapper: (ChartSampleData data, _) => data.y,
+                        color: Colors.green,
+                      ),
+                    ]
+                  : [
+                      SplineSeries<ChartSampleData, DateTime>(
+                        dataSource: chartData3,
+                        xValueMapper: (ChartSampleData data, _) => data.x,
+                        yValueMapper: (ChartSampleData data, _) => data.y,
+                        color: Colors.green,
+                      ),
+                    ],
             ),
           ),
           // 아래의 기간 선택기 그래프 - 모든 데이터를 포함
@@ -328,7 +365,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     : DateTime.now().subtract(Duration(seconds: 1000)),
                 max: chartData1.isNotEmpty ? chartData1.last.x : DateTime.now(),
                 interval: 1,
-                dateIntervalType: DateIntervalType.seconds, // 여기를 수정
+                dateIntervalType: DateIntervalType.seconds,
                 showTicks: true,
                 showLabels: true,
                 controller: rangeController,
@@ -347,26 +384,47 @@ class _MyHomePageState extends State<MyHomePage> {
                     rangeController: rangeController,
                   ),
                   primaryYAxis: NumericAxis(isVisible: false),
-                  series: [
-                    LineSeries<ChartSampleData, DateTime>(
-                      dataSource: chartData1,
-                      xValueMapper: (ChartSampleData data, _) => data.x,
-                      yValueMapper: (ChartSampleData data, _) => data.y,
-                      color: Colors.blue,
-                    ),
-                    LineSeries<ChartSampleData, DateTime>(
-                      dataSource: chartData2,
-                      xValueMapper: (ChartSampleData data, _) => data.x,
-                      yValueMapper: (ChartSampleData data, _) => data.y,
-                      color: Colors.red,
-                    ),
-                    LineSeries<ChartSampleData, DateTime>(
-                      dataSource: chartData3,
-                      xValueMapper: (ChartSampleData data, _) => data.x,
-                      yValueMapper: (ChartSampleData data, _) => data.y,
-                      color: Colors.green,
-                    ),
-                  ],
+                  series: _isLineChart
+                      ? [
+                          LineSeries<ChartSampleData, DateTime>(
+                            dataSource: chartData1,
+                            xValueMapper: (ChartSampleData data, _) => data.x,
+                            yValueMapper: (ChartSampleData data, _) => data.y,
+                            color: Colors.blue,
+                          ),
+                          LineSeries<ChartSampleData, DateTime>(
+                            dataSource: chartData2,
+                            xValueMapper: (ChartSampleData data, _) => data.x,
+                            yValueMapper: (ChartSampleData data, _) => data.y,
+                            color: Colors.red,
+                          ),
+                          LineSeries<ChartSampleData, DateTime>(
+                            dataSource: chartData3,
+                            xValueMapper: (ChartSampleData data, _) => data.x,
+                            yValueMapper: (ChartSampleData data, _) => data.y,
+                            color: Colors.green,
+                          ),
+                        ]
+                      : [
+                          SplineSeries<ChartSampleData, DateTime>(
+                            dataSource: chartData1,
+                            xValueMapper: (ChartSampleData data, _) => data.x,
+                            yValueMapper: (ChartSampleData data, _) => data.y,
+                            color: Colors.blue,
+                          ),
+                          SplineSeries<ChartSampleData, DateTime>(
+                            dataSource: chartData2,
+                            xValueMapper: (ChartSampleData data, _) => data.x,
+                            yValueMapper: (ChartSampleData data, _) => data.y,
+                            color: Colors.red,
+                          ),
+                          SplineSeries<ChartSampleData, DateTime>(
+                            dataSource: chartData3,
+                            xValueMapper: (ChartSampleData data, _) => data.x,
+                            yValueMapper: (ChartSampleData data, _) => data.y,
+                            color: Colors.green,
+                          ),
+                        ],
                 ),
               ),
             ),
