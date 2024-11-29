@@ -5,6 +5,21 @@ import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:syncfusion_flutter_core/core.dart';
 import 'package:syncfusion_flutter_sliders/sliders.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert'; // JSON 인코딩/디코딩
+import 'dart:html' as html;
+import 'dart:js' as js;
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:syncfusion_flutter_charts/charts.dart';
+import 'package:syncfusion_flutter_sliders/sliders.dart';
+import 'package:intl/intl.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+
+// WebSocket 채널 설정
+final WebSocketChannel dataChannel =
+    WebSocketChannel.connect(Uri.parse('ws://127.0.0.1:8765')); // 실시간 데이터 채널
+final WebSocketChannel fullAudioChannel =
+    WebSocketChannel.connect(Uri.parse('ws://127.0.0.1:8766')); // 전체 오디오 데이터 채널
 
 void main() {
   runApp(MyApp());
@@ -14,65 +29,123 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Counselor Dashboard',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: MyHomePage(),
+      title: 'Combined Dashboard',
+      theme: ThemeData(primarySwatch: Colors.blue),
+      home: CombinedDashboard(),
       debugShowCheckedModeBanner: false,
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
+class CombinedDashboard extends StatefulWidget {
   @override
-  _MyHomePageState createState() => _MyHomePageState();
+  _CombinedDashboardState createState() => _CombinedDashboardState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class _CombinedDashboardState extends State<CombinedDashboard> {
   IO.Socket? socket;
   bool _isConnected = false;
   bool _isConnectionRequested = false;
   bool _isConnectionAccepted = false;
   String _patientName = '';
-  bool _isLineChart = true; // 그래프 유형 상태 변수
-  int _currentIconIndex = 0; // 현재 아이콘 인덱스
 
-  final List<IconData> _icons = [
-    Icons.star,
-    Icons.auto_graph_rounded,
-  ];
-
-  List<ChartSampleData> chartData1 = <ChartSampleData>[];
-  List<ChartSampleData> chartData2 = <ChartSampleData>[];
-  List<ChartSampleData> chartData3 = <ChartSampleData>[];
-
+  // 실시간 데이터 관련 상태 (1번 코드)
+  List<ChartSampleData> chartData1 = [];
+  List<ChartSampleData> chartData2 = [];
+  List<ChartSampleData> chartData3 = [];
   late RangeController rangeController;
   DateTime _currentDate = DateTime.now();
+  bool isStreaming = false;
   bool _isStreaming = false; // 데이터를 스트리밍 중인지 확인하는 플래그
+  bool _isLineChart = true;
   late ZoomPanBehavior _zoomPanBehavior;
+  int _currentIconIndex = 0;
+  List<IconData> _icons = [
+    Icons.auto_graph_rounded,
+    Icons.star,
+  ]; // Line과 Curve 변경 아이콘
+
+  // 음성 녹음 관련 상태 (2번 코드)
+  bool isRecording = false;
+  bool isFullRecording = false;
+  List<Map<String, dynamic>> messages = [];
+  List<Uint8List> fullAudioData = [];
+  html.MediaRecorder? mediaRecorder;
+  html.MediaRecorder? fullMediaRecorder;
 
   @override
   void initState() {
     super.initState();
+    _initializeAudioProcessing();
 
+    // 1번 코드 초기화
     _zoomPanBehavior = ZoomPanBehavior(
-        enablePinching: true,
-        enableDoubleTapZooming: true,
-        enableSelectionZooming: true,
-        selectionRectBorderWidth: 2,
-        enablePanning: true);
+      enablePinching: true,
+      enableDoubleTapZooming: true,
+      enableSelectionZooming: true,
+      enablePanning: true,
+    );
 
     rangeController = RangeController(
       start: DateTime.now().subtract(Duration(seconds: 5)),
       end: DateTime.now(),
     );
+
+    // 2번 코드 WebSocket 초기화
+    dataChannel.stream.listen((message) {
+      final decodedMessage = json.decode(message);
+
+      setState(() {
+        if (decodedMessage is List) {
+          for (var data in decodedMessage) {
+            String text = data['text'] ?? '';
+            if (text.isNotEmpty) {
+              messages.add({
+                "label": data['label'] ?? 'unknown',
+                "text": text,
+                "start": data['start'] ?? 0.0,
+                "end": data['end'] ?? 0.0,
+                "sentTime": data['send_time'] ?? '',
+              });
+            }
+          }
+        } else if (decodedMessage is Map<String, dynamic>) {
+          String text = decodedMessage['text'] ?? '';
+          if (text.isNotEmpty) {
+            messages.add({
+              "label": decodedMessage['label'] ?? 'unknown',
+              "text": text,
+              "start": decodedMessage['start'] ?? 0.0,
+              "end": decodedMessage['end'] ?? 0.0,
+              "sentTime": decodedMessage['send_time'] ?? '',
+            });
+          }
+        }
+      });
+    });
+  }
+
+  void _initializeAudioProcessing() {
+    js.context.callMethod('startAudioProcessing'); // 외부 VAD 호출
+
+    html.window.addEventListener('audioStarted', (event) {
+      if (!isRecording) {
+        _startRecording();
+      }
+    });
+
+    html.window.addEventListener('audioStopped', (event) {
+      if (isRecording) {
+        _stopRecording();
+      }
+    });
   }
 
   @override
   void dispose() {
+    dataChannel.sink.close();
+    fullAudioChannel.sink.close();
     rangeController.dispose();
-    socket?.disconnect();
     super.dispose();
   }
 
@@ -161,6 +234,109 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  // 음성 녹음 시작
+  Future<void> _startRecording() async {
+    final stream =
+        await html.window.navigator.mediaDevices!.getUserMedia({'audio': true});
+    mediaRecorder = html.MediaRecorder(stream);
+
+    mediaRecorder!.addEventListener('dataavailable', (event) {
+      final blob = (event as html.BlobEvent).data;
+      if (blob != null) {
+        final reader = html.FileReader();
+        reader.readAsArrayBuffer(blob);
+        reader.onLoadEnd.listen((e) {
+          final bytes = reader.result as Uint8List;
+
+          final currentTime =
+              DateTime.now().toIso8601String().substring(11, 19);
+          print("Sending audio data of length: ${bytes.length}");
+
+          final data = {
+            "audio": bytes,
+            "sentTime": currentTime,
+          };
+
+          dataChannel.sink.add(json.encode(data));
+          print("Audio data sent to server with time: $currentTime");
+        });
+      } else {
+        print("No data available in the blob.");
+      }
+    });
+
+    mediaRecorder!.start();
+    setState(() {
+      isRecording = true;
+    });
+  }
+
+  // 음성 녹음 정지
+  void _stopRecording() {
+    mediaRecorder?.stop();
+    setState(() {
+      isRecording = false;
+    });
+  }
+
+  // 전체 오디오 녹음 시작
+  Future<void> _startFullRecording() async {
+    final stream =
+        await html.window.navigator.mediaDevices!.getUserMedia({'audio': true});
+    fullMediaRecorder = html.MediaRecorder(stream);
+
+    fullMediaRecorder!.addEventListener('dataavailable', (event) {
+      final blob = (event as html.BlobEvent).data;
+      if (blob != null) {
+        final reader = html.FileReader();
+        reader.readAsArrayBuffer(blob);
+        reader.onLoadEnd.listen((e) {
+          final bytes = reader.result as Uint8List;
+
+          fullAudioData.add(bytes); // 전체 오디오 데이터를 저장
+          print("Recording full audio data of length: ${bytes.length}");
+        });
+      } else {
+        print("No data available in the blob.");
+      }
+    });
+
+    fullMediaRecorder!.start();
+    setState(() {
+      isFullRecording = true;
+    });
+  }
+
+  // 전체 오디오 녹음 정지 및 전송
+  void _stopFullRecording() async {
+    fullMediaRecorder?.stop();
+    setState(() {
+      isFullRecording = false;
+    });
+
+    // 딜레이 추가
+    await Future.delayed(Duration(seconds: 1));
+
+    // 전체 오디오 데이터를 WebSocket 서버로 전송
+    if (fullAudioData.isNotEmpty) {
+      final timeOnly = DateTime.now().toIso8601String().substring(11, 19);
+      final data = {
+        "audio": fullAudioData, // 전체 오디오 데이터를 전송
+        "sentTime": timeOnly,
+      };
+
+      fullAudioChannel.sink.add(json.encode(data));
+      print("Full audio data sent to server with time: $timeOnly");
+
+      // 전체 오디오 데이터 초기화
+      fullAudioData.clear();
+    } else if (fullAudioData.isEmpty) {
+      print("empty");
+    }
+
+    print("Full recording stopped.");
+  }
+
   void _startDataTransmission() {
     setState(() {
       _isStreaming = true;
@@ -195,8 +371,9 @@ class _MyHomePageState extends State<MyHomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Counselor Dashboard"),
+        title: Text("Combined Dashboard"),
         actions: [
+          // 그래프 유형 전환 아이콘 버튼
           IconButton(
             icon: Icon(
               _icons[_currentIconIndex],
@@ -205,228 +382,338 @@ class _MyHomePageState extends State<MyHomePage> {
             onPressed: () {
               setState(() {
                 _currentIconIndex = (_currentIconIndex + 1) % _icons.length;
-                _isLineChart = !_isLineChart;
+                _isLineChart = !_isLineChart; // Line/Curve 전환
               });
             },
             tooltip: _isLineChart ? "Switch to Curve" : "Switch to Line",
           ),
         ],
       ),
-      body: Column(
+      body: Row(
         children: [
-          if (!_isConnected)
-            Center(
-              child: ElevatedButton(
-                onPressed: _connectWebSocket,
-                child: Text("Connect"),
-              ),
-            )
-          else if (_isConnected && _isConnectionRequested)
-            Column(
+          // 왼쪽: 실시간 데이터 시각화 (1번 코드)
+          Expanded(
+            flex: 2,
+            child: Column(
               children: [
-                Text('Connect with $_patientName?'),
-                SizedBox(height: 8),
-                ElevatedButton(
-                  onPressed: () {
-                    if (socket != null && socket!.connected) {
-                      socket!.emit('accept_connection');
-                    }
-                  },
-                  child: Text('Accept Connection'),
-                ),
-                SizedBox(height: 8),
-                ElevatedButton(
-                  onPressed: () {
-                    if (socket != null && socket!.connected) {
-                      socket!.emit('decline_connection');
-                      setState(() {
-                        _isConnectionRequested = false;
-                      });
-                    }
-                  },
-                  child: Text('Decline Connection'),
-                ),
-              ],
-            )
-          else if (_isConnected && _isConnectionAccepted)
-            Column(
-              children: [
-                Text('Connected with $_patientName'),
-                SizedBox(height: 8),
-                ElevatedButton(
-                  onPressed: _startDataTransmission,
-                  child: Text('Start Data Transmission'),
-                ),
-                SizedBox(height: 8),
-                ElevatedButton(
-                  onPressed: _stopDataTransmission,
-                  child: Text('Stop Data Transmission'),
-                ),
-              ],
-            ),
-          // 첫 번째 그래프 - chartData1만 사용
-          Expanded(
-            flex: 1,
-            child: SfCartesianChart(
-              title: ChartTitle(text: 'Data 1 Chart'),
-              primaryXAxis: DateTimeAxis(
-                dateFormat: DateFormat('HH:mm:ss'),
-                intervalType: DateTimeIntervalType.seconds,
-                rangeController: rangeController,
-              ),
-              primaryYAxis: NumericAxis(),
-              series: _isLineChart
-                  ? [
-                      LineSeries<ChartSampleData, DateTime>(
-                        dataSource: chartData1,
-                        xValueMapper: (ChartSampleData data, _) => data.x,
-                        yValueMapper: (ChartSampleData data, _) => data.y,
-                        color: Colors.blue,
+                if (!_isConnected)
+                  Center(
+                    child: ElevatedButton(
+                      onPressed: _connectWebSocket,
+                      child: Text("Connect"),
+                    ),
+                  )
+                else if (_isConnected && _isConnectionRequested)
+                  Column(
+                    children: [
+                      Text('Connect with $_patientName?'),
+                      SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: () {
+                          if (socket != null && socket!.connected) {
+                            socket!.emit('accept_connection');
+                          }
+                        },
+                        child: Text('Accept Connection'),
                       ),
-                    ]
-                  : [
-                      SplineSeries<ChartSampleData, DateTime>(
-                        dataSource: chartData1,
-                        xValueMapper: (ChartSampleData data, _) => data.x,
-                        yValueMapper: (ChartSampleData data, _) => data.y,
-                        color: Colors.blue,
+                      SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: () {
+                          if (socket != null && socket!.connected) {
+                            socket!.emit('decline_connection');
+                            setState(() {
+                              _isConnectionRequested = false;
+                            });
+                          }
+                        },
+                        child: Text('Decline Connection'),
                       ),
                     ],
-            ),
-          ),
-          // 두 번째 그래프 - chartData2만 사용
-          Expanded(
-            flex: 1,
-            child: SfCartesianChart(
-              title: ChartTitle(text: 'Data 2 Chart'),
-              primaryXAxis: DateTimeAxis(
-                dateFormat: DateFormat('HH:mm:ss'),
-                intervalType: DateTimeIntervalType.seconds,
-                rangeController: rangeController,
-              ),
-              primaryYAxis: NumericAxis(),
-              series: _isLineChart
-                  ? [
-                      LineSeries<ChartSampleData, DateTime>(
-                        dataSource: chartData2,
-                        xValueMapper: (ChartSampleData data, _) => data.x,
-                        yValueMapper: (ChartSampleData data, _) => data.y,
-                        color: Colors.red,
+                  )
+                else if (_isConnected && _isConnectionAccepted)
+                  Column(
+                    children: [
+                      Text('Connected with $_patientName'),
+                      SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: _startDataTransmission,
+                        child: Text('Start Data Transmission'),
                       ),
-                    ]
-                  : [
-                      SplineSeries<ChartSampleData, DateTime>(
-                        dataSource: chartData2,
-                        xValueMapper: (ChartSampleData data, _) => data.x,
-                        yValueMapper: (ChartSampleData data, _) => data.y,
-                        color: Colors.red,
+                      SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: _stopDataTransmission,
+                        child: Text('Stop Data Transmission'),
                       ),
                     ],
-            ),
-          ),
-          // 세 번째 그래프 - chartData3만 사용
-          Expanded(
-            flex: 1,
-            child: SfCartesianChart(
-              title: ChartTitle(text: 'Data 3 Chart'),
-              primaryXAxis: DateTimeAxis(
-                dateFormat: DateFormat('HH:mm:ss'),
-                intervalType: DateTimeIntervalType.seconds,
-                rangeController: rangeController,
-              ),
-              primaryYAxis: NumericAxis(),
-              series: _isLineChart
-                  ? [
-                      LineSeries<ChartSampleData, DateTime>(
-                        dataSource: chartData3,
-                        xValueMapper: (ChartSampleData data, _) => data.x,
-                        yValueMapper: (ChartSampleData data, _) => data.y,
-                        color: Colors.green,
-                      ),
-                    ]
-                  : [
-                      SplineSeries<ChartSampleData, DateTime>(
-                        dataSource: chartData3,
-                        xValueMapper: (ChartSampleData data, _) => data.x,
-                        yValueMapper: (ChartSampleData data, _) => data.y,
-                        color: Colors.green,
-                      ),
-                    ],
-            ),
-          ),
-          // 아래의 기간 선택기 그래프 - 모든 데이터를 포함
-          Expanded(
-            flex: 1,
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: SfRangeSelector(
-                min: chartData1.isNotEmpty
-                    ? chartData1.first.x
-                    : DateTime.now().subtract(Duration(seconds: 1000)),
-                max: chartData1.isNotEmpty ? chartData1.last.x : DateTime.now(),
-                interval: 1,
-                dateIntervalType: DateIntervalType.seconds,
-                showTicks: true,
-                showLabels: true,
-                controller: rangeController,
-                dragMode: SliderDragMode.both,
-                onChanged: (SfRangeValues values) {
-                  setState(() {
-                    DateTime newStart = values.start as DateTime;
-                    DateTime newEnd = values.end as DateTime;
-                    rangeController.start = newStart;
-                    rangeController.end = newEnd;
-                  });
-                },
-                child: SfCartesianChart(
-                  primaryXAxis: DateTimeAxis(
-                    intervalType: DateTimeIntervalType.seconds,
-                    rangeController: rangeController,
                   ),
-                  primaryYAxis: NumericAxis(isVisible: false),
-                  series: _isLineChart
-                      ? [
-                          LineSeries<ChartSampleData, DateTime>(
-                            dataSource: chartData1,
-                            xValueMapper: (ChartSampleData data, _) => data.x,
-                            yValueMapper: (ChartSampleData data, _) => data.y,
-                            color: Colors.blue,
-                          ),
-                          LineSeries<ChartSampleData, DateTime>(
-                            dataSource: chartData2,
-                            xValueMapper: (ChartSampleData data, _) => data.x,
-                            yValueMapper: (ChartSampleData data, _) => data.y,
-                            color: Colors.red,
-                          ),
-                          LineSeries<ChartSampleData, DateTime>(
-                            dataSource: chartData3,
-                            xValueMapper: (ChartSampleData data, _) => data.x,
-                            yValueMapper: (ChartSampleData data, _) => data.y,
-                            color: Colors.green,
-                          ),
-                        ]
-                      : [
-                          SplineSeries<ChartSampleData, DateTime>(
-                            dataSource: chartData1,
-                            xValueMapper: (ChartSampleData data, _) => data.x,
-                            yValueMapper: (ChartSampleData data, _) => data.y,
-                            color: Colors.blue,
-                          ),
-                          SplineSeries<ChartSampleData, DateTime>(
-                            dataSource: chartData2,
-                            xValueMapper: (ChartSampleData data, _) => data.x,
-                            yValueMapper: (ChartSampleData data, _) => data.y,
-                            color: Colors.red,
-                          ),
-                          SplineSeries<ChartSampleData, DateTime>(
-                            dataSource: chartData3,
-                            xValueMapper: (ChartSampleData data, _) => data.x,
-                            yValueMapper: (ChartSampleData data, _) => data.y,
-                            color: Colors.green,
-                          ),
-                        ],
+                // 첫 번째 그래프 - chartData1만 사용
+                Expanded(
+                  flex: 1,
+                  child: SfCartesianChart(
+                    title: ChartTitle(text: 'Data 1 Chart'),
+                    primaryXAxis: DateTimeAxis(
+                      dateFormat: DateFormat('HH:mm:ss'),
+                      intervalType: DateTimeIntervalType.seconds,
+                      rangeController: rangeController,
+                    ),
+                    primaryYAxis: NumericAxis(),
+                    series: _isLineChart
+                        ? [
+                            LineSeries<ChartSampleData, DateTime>(
+                              dataSource: chartData1,
+                              xValueMapper: (ChartSampleData data, _) => data.x,
+                              yValueMapper: (ChartSampleData data, _) => data.y,
+                              color: Colors.blue,
+                            ),
+                          ]
+                        : [
+                            SplineSeries<ChartSampleData, DateTime>(
+                              dataSource: chartData1,
+                              xValueMapper: (ChartSampleData data, _) => data.x,
+                              yValueMapper: (ChartSampleData data, _) => data.y,
+                              color: Colors.blue,
+                            ),
+                          ],
+                  ),
                 ),
-              ),
+                // 두 번째 그래프 - chartData2만 사용
+                Expanded(
+                  flex: 1,
+                  child: SfCartesianChart(
+                    title: ChartTitle(text: 'Data 2 Chart'),
+                    primaryXAxis: DateTimeAxis(
+                      dateFormat: DateFormat('HH:mm:ss'),
+                      intervalType: DateTimeIntervalType.seconds,
+                      rangeController: rangeController,
+                    ),
+                    primaryYAxis: NumericAxis(),
+                    series: _isLineChart
+                        ? [
+                            LineSeries<ChartSampleData, DateTime>(
+                              dataSource: chartData2,
+                              xValueMapper: (ChartSampleData data, _) => data.x,
+                              yValueMapper: (ChartSampleData data, _) => data.y,
+                              color: Colors.red,
+                            ),
+                          ]
+                        : [
+                            SplineSeries<ChartSampleData, DateTime>(
+                              dataSource: chartData2,
+                              xValueMapper: (ChartSampleData data, _) => data.x,
+                              yValueMapper: (ChartSampleData data, _) => data.y,
+                              color: Colors.red,
+                            ),
+                          ],
+                  ),
+                ),
+                // 세 번째 그래프 - chartData3만 사용
+                Expanded(
+                  flex: 1,
+                  child: SfCartesianChart(
+                    title: ChartTitle(text: 'Data 3 Chart'),
+                    primaryXAxis: DateTimeAxis(
+                      dateFormat: DateFormat('HH:mm:ss'),
+                      intervalType: DateTimeIntervalType.seconds,
+                      rangeController: rangeController,
+                    ),
+                    primaryYAxis: NumericAxis(),
+                    series: _isLineChart
+                        ? [
+                            LineSeries<ChartSampleData, DateTime>(
+                              dataSource: chartData3,
+                              xValueMapper: (ChartSampleData data, _) => data.x,
+                              yValueMapper: (ChartSampleData data, _) => data.y,
+                              color: Colors.green,
+                            ),
+                          ]
+                        : [
+                            SplineSeries<ChartSampleData, DateTime>(
+                              dataSource: chartData3,
+                              xValueMapper: (ChartSampleData data, _) => data.x,
+                              yValueMapper: (ChartSampleData data, _) => data.y,
+                              color: Colors.green,
+                            ),
+                          ],
+                  ),
+                ),
+                // 아래의 기간 선택기 그래프 - 모든 데이터를 포함
+                Expanded(
+                  flex: 1,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: SfRangeSelector(
+                      min: chartData1.isNotEmpty
+                          ? chartData1.first.x
+                          : DateTime.now().subtract(Duration(seconds: 1000)),
+                      max: chartData1.isNotEmpty
+                          ? chartData1.last.x
+                          : DateTime.now(),
+                      interval: 1,
+                      dateIntervalType: DateIntervalType.seconds,
+                      showTicks: true,
+                      showLabels: true,
+                      controller: rangeController,
+                      dragMode: SliderDragMode.both,
+                      onChanged: (SfRangeValues values) {
+                        setState(() {
+                          DateTime newStart = values.start as DateTime;
+                          DateTime newEnd = values.end as DateTime;
+                          rangeController.start = newStart;
+                          rangeController.end = newEnd;
+                        });
+                      },
+                      child: SfCartesianChart(
+                        primaryXAxis: DateTimeAxis(
+                          intervalType: DateTimeIntervalType.seconds,
+                          rangeController: rangeController,
+                        ),
+                        primaryYAxis: NumericAxis(isVisible: false),
+                        series: _isLineChart
+                            ? [
+                                LineSeries<ChartSampleData, DateTime>(
+                                  dataSource: chartData1,
+                                  xValueMapper: (ChartSampleData data, _) =>
+                                      data.x,
+                                  yValueMapper: (ChartSampleData data, _) =>
+                                      data.y,
+                                  color: Colors.blue,
+                                ),
+                                LineSeries<ChartSampleData, DateTime>(
+                                  dataSource: chartData2,
+                                  xValueMapper: (ChartSampleData data, _) =>
+                                      data.x,
+                                  yValueMapper: (ChartSampleData data, _) =>
+                                      data.y,
+                                  color: Colors.red,
+                                ),
+                                LineSeries<ChartSampleData, DateTime>(
+                                  dataSource: chartData3,
+                                  xValueMapper: (ChartSampleData data, _) =>
+                                      data.x,
+                                  yValueMapper: (ChartSampleData data, _) =>
+                                      data.y,
+                                  color: Colors.green,
+                                ),
+                              ]
+                            : [
+                                SplineSeries<ChartSampleData, DateTime>(
+                                  dataSource: chartData1,
+                                  xValueMapper: (ChartSampleData data, _) =>
+                                      data.x,
+                                  yValueMapper: (ChartSampleData data, _) =>
+                                      data.y,
+                                  color: Colors.blue,
+                                ),
+                                SplineSeries<ChartSampleData, DateTime>(
+                                  dataSource: chartData2,
+                                  xValueMapper: (ChartSampleData data, _) =>
+                                      data.x,
+                                  yValueMapper: (ChartSampleData data, _) =>
+                                      data.y,
+                                  color: Colors.red,
+                                ),
+                                SplineSeries<ChartSampleData, DateTime>(
+                                  dataSource: chartData3,
+                                  xValueMapper: (ChartSampleData data, _) =>
+                                      data.x,
+                                  yValueMapper: (ChartSampleData data, _) =>
+                                      data.y,
+                                  color: Colors.green,
+                                ),
+                              ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // 오른쪽: 음성 관련 데이터 표시 (2번 코드)
+          Expanded(
+            flex: 1,
+            child: Column(
+              children: [
+                ElevatedButton(
+                  onPressed: isFullRecording
+                      ? _stopFullRecording
+                      : _startFullRecording,
+                  child: Text(isFullRecording
+                      ? "Stop Full Recording"
+                      : "Start Full Recording"),
+                ),
+                Expanded(
+                  child: messages.isEmpty
+                      ? Center(child: Text('No data available'))
+                      : ListView.builder(
+                          itemCount: messages.length,
+                          itemBuilder: (context, index) {
+                            final message = messages[index];
+                            return ListTile(
+                              title: Row(
+                                children: [
+                                  Text(
+                                    'Speaker: ',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () async {
+                                      final newValue = await showDialog<String>(
+                                        context: context,
+                                        builder: (context) {
+                                          return SimpleDialog(
+                                            title: Text('Select Label'),
+                                            children: [
+                                              'me',
+                                              'another',
+                                              'unknown'
+                                            ]
+                                                .map((label) =>
+                                                    SimpleDialogOption(
+                                                      onPressed: () {
+                                                        Navigator.pop(
+                                                            context, label);
+                                                      },
+                                                      child: Text(label),
+                                                    ))
+                                                .toList(),
+                                          );
+                                        },
+                                      );
+                                      if (newValue != null &&
+                                          newValue.isNotEmpty) {
+                                        setState(() {
+                                          message['label'] = newValue;
+                                        });
+                                        print("Label updated to: $newValue");
+                                      }
+                                    },
+                                    child: Text(
+                                      message['label'],
+                                      style: TextStyle(
+                                        color: message['label'] == 'me'
+                                            ? Colors.blue
+                                            : Colors.green,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(message['text']),
+                                  Text("Sent Time: ${message['sentTime']}",
+                                      style: TextStyle(
+                                          fontSize: 12, color: Colors.grey)),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
           ),
         ],
@@ -435,6 +722,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 }
 
+// 실시간 데이터 및 오디오 관련 구조체 (예시)
 class ChartSampleData {
   ChartSampleData({required this.x, required this.y});
   final DateTime x;
