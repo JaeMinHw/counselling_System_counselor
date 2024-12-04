@@ -367,11 +367,39 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     }
   }
 
+  void _moveToGraphTime(String selectedTime) {
+    try {
+      // Parse the String (e.g., "21:11:06") into a DateTime
+      List<String> parts = selectedTime.split(":");
+      int hours = int.parse(parts[0]);
+      int minutes = int.parse(parts[1]);
+      int seconds = int.parse(parts[2]);
+
+      // Create a DateTime using today's date with the parsed time
+      DateTime parsedTime = DateTime(
+        DateTime.now().year,
+        DateTime.now().month,
+        DateTime.now().day,
+        hours,
+        minutes,
+        seconds,
+      );
+
+      setState(() {
+        // Use the parsed DateTime to update the rangeController
+        rangeController.start = parsedTime.subtract(Duration(seconds: 5));
+        rangeController.end = parsedTime.add(Duration(seconds: 5));
+      });
+    } catch (e) {
+      debugPrint("Error in _moveToGraphTime: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Combined Dashboard"),
+        title: Text("사용자 데이터 그래프"),
         actions: [
           // 그래프 유형 전환 아이콘 버튼
           IconButton(
@@ -649,6 +677,10 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                           itemBuilder: (context, index) {
                             final message = messages[index];
                             return ListTile(
+                              onTap: () {
+                                // 여기에 클릭하면 해당 시간 그래프 이동하는 함수로 보내는 코드 작성.
+                                _moveToGraphTime(message['sentTime']);
+                              },
                               title: Row(
                                 children: [
                                   Text(
