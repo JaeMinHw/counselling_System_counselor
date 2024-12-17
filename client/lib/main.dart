@@ -43,6 +43,7 @@ class CombinedDashboard extends StatefulWidget {
 }
 
 class _CombinedDashboardState extends State<CombinedDashboard> {
+  int data_keep_count = 100000;
   IO.Socket? socket;
   bool _isConnected = false;
   bool _isConnectionRequested = false;
@@ -201,36 +202,99 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
 
   void _setUpDataUpdateListener() {
     socket!.off('data_update'); // 기존 리스너 제거
+    socket!.off('data_update_batch'); // 배치 리스너 제거
+
+    // 즉시 데이터 리스너
     socket!.on('data_update', (data) {
       if (_isStreaming) {
-        double newData1 = double.parse(data['data1'].toString());
-        double newData2 = double.parse(data['data2'].toString());
-        double newData3 = double.parse(data['data3'].toString());
-        DateTime serverTime = data.containsKey('timestamp')
-            ? DateTime.parse(data['timestamp'])
+        print(data);
+
+        double newValue = double.parse(data['value'].toString());
+        String sensor = data['sensor'];
+        DateTime serverTime = data.containsKey('time')
+            ? DateTime.parse(data['time'])
             : DateTime.now();
-        _updateChartData(newData1, newData2, newData3, serverTime);
+
+        if (sensor == 'data2') {
+          _updateChartData2(newValue, serverTime);
+        } else if (sensor == 'data3') {
+          _updateChartData3(newValue, serverTime);
+        }
+
         debugPrint(
-            "Received data update: data1=$newData1, data2=$newData2, data3=$newData3, time=$serverTime");
+            "Received immediate data update: sensor=$sensor, value=$newValue, time=$serverTime");
+      }
+    });
+
+    // 배치 데이터 리스너
+    socket!.on('data_update_batch', (data) {
+      if (_isStreaming) {
+        print(data);
+
+        if (data.containsKey('data1_batch')) {
+          List<dynamic> batch = data['data1_batch'];
+
+          for (var entry in batch) {
+            if (entry is Map &&
+                entry.containsKey('value') &&
+                entry.containsKey('time')) {
+              try {
+                double newData1 = double.parse(entry['value'].toString());
+                DateTime entryTime = DateTime.parse(entry['time'].toString());
+                _updateChartData1(newData1, entryTime);
+              } catch (e) {
+                debugPrint('Error parsing batch entry: $e');
+              }
+            } else {
+              debugPrint('Invalid batch entry: $entry');
+            }
+          }
+        } else {
+          debugPrint('Invalid batch format received: $data');
+        }
       }
     });
   }
 
-  void _updateChartData(
-      double data1, double data2, double data3, DateTime time) {
+  void _updateChartData1(double data1, DateTime time) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      setState(() {
+        chartData1.add(ChartSampleData(x: time, y: data1));
+
+        if (chartData1.length > data_keep_count) {
+          chartData1.removeAt(0);
+        }
+
+        rangeController.start =
+            chartData1.last.x.subtract(Duration(seconds: 5));
+        rangeController.end = chartData1.last.x;
+      });
+    });
+  }
+
+  void _updateChartData2(double data2, DateTime time) {
     setState(() {
-      chartData1.add(ChartSampleData(x: time, y: data1));
       chartData2.add(ChartSampleData(x: time, y: data2));
+
+      if (chartData2.length > data_keep_count) {
+        chartData2.removeAt(0);
+      }
+
+      rangeController.start = chartData2.last.x.subtract(Duration(seconds: 5));
+      rangeController.end = chartData2.last.x;
+    });
+  }
+
+  void _updateChartData3(double data3, DateTime time) {
+    setState(() {
       chartData3.add(ChartSampleData(x: time, y: data3));
 
-      if (chartData1.length > 1000) {
-        chartData1.removeAt(0);
-        chartData2.removeAt(0);
+      if (chartData3.length > data_keep_count) {
         chartData3.removeAt(0);
       }
 
-      rangeController.start = chartData1.last.x.subtract(Duration(seconds: 5));
-      rangeController.end = chartData1.last.x;
+      rangeController.start = chartData3.last.x.subtract(Duration(seconds: 5));
+      rangeController.end = chartData3.last.x;
     });
   }
 
@@ -492,6 +556,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                               xValueMapper: (ChartSampleData data, _) => data.x,
                               yValueMapper: (ChartSampleData data, _) => data.y,
                               color: Colors.blue,
+                              animationDuration: 0, // 애니메이션 비활성화
                             ),
                           ]
                         : [
@@ -500,6 +565,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                               xValueMapper: (ChartSampleData data, _) => data.x,
                               yValueMapper: (ChartSampleData data, _) => data.y,
                               color: Colors.blue,
+                              animationDuration: 0, // 애니메이션 비활성화
                             ),
                           ],
                   ),
