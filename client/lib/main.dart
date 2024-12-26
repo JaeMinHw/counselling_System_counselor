@@ -207,7 +207,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     // 즉시 데이터 리스너
     socket!.on('data_update', (data) {
       if (_isStreaming) {
-        print(data);
+        // print(data);
 
         double newValue = double.parse(data['value'].toString());
         String sensor = data['sensor'];
@@ -221,15 +221,14 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
           _updateChartData3(newValue, serverTime);
         }
 
-        debugPrint(
-            "Received immediate data update: sensor=$sensor, value=$newValue, time=$serverTime");
+        // debugPrint(            "Received immediate data update: sensor=$sensor, value=$newValue, time=$serverTime");
       }
     });
 
     // 배치 데이터 리스너
     socket!.on('data_update_batch', (data) {
       if (_isStreaming) {
-        print(data);
+        // print(data);
 
         if (data.containsKey('data1_batch')) {
           List<dynamic> batch = data['data1_batch'];
