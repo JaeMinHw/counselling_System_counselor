@@ -255,15 +255,14 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     });
   }
 
-  void _updateChartData1(double data1, DateTime time) {
+  void _updateChartData1(double data1, DateTime time) async {
+    await Future.delayed(Duration.zero); // 비동기 처리
     WidgetsBinding.instance.addPostFrameCallback((_) {
       setState(() {
         chartData1.add(ChartSampleData(x: time, y: data1));
-
         if (chartData1.length > data_keep_count) {
           chartData1.removeAt(0);
         }
-
         rangeController.start =
             chartData1.last.x.subtract(Duration(seconds: 5));
         rangeController.end = chartData1.last.x;
@@ -271,16 +270,18 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     });
   }
 
-  void _updateChartData2(double data2, DateTime time) {
-    setState(() {
-      chartData2.add(ChartSampleData(x: time, y: data2));
-
-      if (chartData2.length > data_keep_count) {
-        chartData2.removeAt(0);
-      }
-
-      rangeController.start = chartData2.last.x.subtract(Duration(seconds: 5));
-      rangeController.end = chartData2.last.x;
+  void _updateChartData2(double data2, DateTime time) async {
+    await Future.delayed(Duration.zero); // 비동기 처리
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      setState(() {
+        chartData2.add(ChartSampleData(x: time, y: data2));
+        if (chartData2.length > data_keep_count) {
+          chartData2.removeAt(0);
+        }
+        rangeController.start =
+            chartData2.last.x.subtract(Duration(seconds: 5));
+        rangeController.end = chartData2.last.x;
+      });
     });
   }
 
