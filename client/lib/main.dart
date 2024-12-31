@@ -14,6 +14,7 @@ import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:syncfusion_flutter_sliders/sliders.dart';
 import 'package:intl/intl.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:flutter/rendering.dart';
 
 // WebSocket 채널 설정
 final WebSocketChannel dataChannel =
@@ -22,6 +23,7 @@ final WebSocketChannel fullAudioChannel =
     WebSocketChannel.connect(Uri.parse('ws://127.0.0.1:8766')); // 전체 오디오 데이터 채널
 
 void main() {
+  debugRepaintRainbowEnabled = true;
   runApp(MyApp());
 }
 
