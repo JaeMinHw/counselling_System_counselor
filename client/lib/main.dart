@@ -45,6 +45,9 @@ class CombinedDashboard extends StatefulWidget {
 }
 
 class _CombinedDashboardState extends State<CombinedDashboard> {
+  // ScrollController 추가
+  final ScrollController _scrollController = ScrollController();
+
   int data_keep_count = 100000;
   IO.Socket? socket;
   bool _isConnected = false;
@@ -124,6 +127,8 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
             });
           }
         }
+        _sortMessagesByTime(); // 메시지 정렬
+        _scrollToBottom(); // 메시지 추가 후 항상 스크롤 이동
       });
     });
   }
@@ -146,10 +151,20 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
 
   @override
   void dispose() {
+    _scrollController.dispose(); // ScrollController 해제
     dataChannel.sink.close();
     fullAudioChannel.sink.close();
     rangeController.dispose();
     super.dispose();
+  }
+
+  // 메시지 추가 시 스크롤 이동
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      }
+    });
   }
 
   void _connectWebSocket() {
@@ -255,8 +270,93 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         }
       }
     });
+
+    socket!.on('feature_detect', (data) {
+      print(data);
+      final Map<String, dynamic> receivedData = data;
+      final String time = receivedData['time'] as String;
+      final String feature = receivedData['feature'] as String;
+      print("time: $time");
+      print("feature: $feature");
+      // 가장 가까운 메시지에 감정을 추가하거나 새로운 메시지 생성
+      _addEmotionToClosestMessage(time, feature);
+    });
   }
 
+// ----------------------------------------
+  int _findClosestMessageIndex(String time) {
+    final DateTime targetTime = DateFormat('HH:mm:ss').parse(time);
+    int closestIndex = 0;
+    Duration smallestDifference = Duration(hours: 24); // 초기값으로 큰 값 설정
+
+    for (int i = 0; i < messages.length; i++) {
+      final DateTime messageTime =
+          DateFormat('HH:mm:ss').parse(messages[i]['sentTime']);
+      final Duration difference = (messageTime.difference(targetTime)).abs();
+
+      if (difference < smallestDifference) {
+        smallestDifference = difference;
+        closestIndex = i;
+      }
+    }
+    return closestIndex;
+  }
+
+  void _addNewEmotionMessage(String time, String feature) {
+    final Map<String, dynamic> newMessage = {
+      'sentTime': time,
+      'text': '', // 텍스트 없이 감정만 표시
+      'label': 'emotion',
+      'emotion': feature,
+    };
+
+    setState(() {
+      // 새로운 메시지를 추가하며 정렬
+      messages.add(newMessage);
+      _sortMessagesByTime();
+    });
+    // 메시지 추가 후 스크롤 이동
+    _scrollToBottom();
+  }
+
+  void _addEmotionToClosestMessage(String time, String feature) {
+    final DateTime targetTime = DateFormat('HH:mm:ss').parse(time);
+    int closestIndex = _findClosestMessageIndex(time);
+
+    final DateTime closestMessageTime =
+        DateFormat('HH:mm:ss').parse(messages[closestIndex]['sentTime']);
+    final Duration difference =
+        (closestMessageTime.difference(targetTime)).abs();
+
+    if (difference.inSeconds > 3) {
+      // 3초 이상 차이가 나면 새로운 메시지를 추가하고 정렬
+      _addNewEmotionMessage(time, feature);
+    } else {
+      // 기존 메시지에 감정 추가
+      setState(() {
+        messages[closestIndex]['emotion'] = feature;
+      });
+      // 메시지를 정렬 (이 경우 기존 메시지가 갱신되므로 정렬 유지됨)
+      _sortMessagesByTime();
+      // 메시지 추가 후 스크롤 이동
+      _scrollToBottom();
+    }
+  }
+
+// 메시지 정렬 함수
+  void _sortMessagesByTime() {
+    messages.sort((a, b) {
+      final DateTime timeA = DateFormat('HH:mm:ss').parse(a['sentTime']);
+      final DateTime timeB = DateFormat('HH:mm:ss').parse(b['sentTime']);
+
+      int result = timeA.compareTo(timeB);
+      print(result);
+
+      return result;
+    });
+  }
+
+// -------------------------------------------------
   void _updateChartData1(double data1, DateTime time) async {
     await Future.delayed(Duration.zero); // 비동기 처리
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -741,6 +841,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                   child: messages.isEmpty
                       ? Center(child: Text('No data available'))
                       : ListView.builder(
+                          controller: _scrollController, // ScrollController 설정
                           itemCount: messages.length,
                           itemBuilder: (context, index) {
                             final message = messages[index];
@@ -807,6 +908,13 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                                   Text("Sent Time: ${message['sentTime']}",
                                       style: TextStyle(
                                           fontSize: 12, color: Colors.grey)),
+                                  if (message['emotion'] != null) // 감정 표시
+                                    Text(
+                                      'Emotion: ${message['emotion']}',
+                                      style: TextStyle(
+                                          color: Colors.blue,
+                                          fontStyle: FontStyle.italic),
+                                    ),
                                 ],
                               ),
                             );

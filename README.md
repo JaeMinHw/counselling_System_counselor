@@ -2,6 +2,18 @@
 
 A new Flutter project.
 
+if you want run, so you must be run to profile or release mode.
+because, graph and voice is not working.
+
+
+
+![flowchart](flowchart.png)
+<div align="center">
+System flow chart
+</div>
+
+
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.
