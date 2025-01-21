@@ -47,7 +47,8 @@ class CombinedDashboard extends StatefulWidget {
 class _CombinedDashboardState extends State<CombinedDashboard> {
   // ScrollController 추가
   final ScrollController _scrollController = ScrollController();
-
+  // 음성 감지 상태 추가
+  bool _isVoiceDetectionEnabled = true; // 음성 감지 초기값 (활성화)
   int data_keep_count = 100000;
   IO.Socket? socket;
   bool _isConnected = false;
@@ -100,8 +101,8 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     // 2번 코드 WebSocket 초기화
     dataChannel.stream.listen((message) {
       final decodedMessage = json.decode(message);
-
       setState(() {
+        // 메시지 처리 로직
         if (decodedMessage is List) {
           for (var data in decodedMessage) {
             String text = data['text'] ?? '';
@@ -127,9 +128,16 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
             });
           }
         }
-        _sortMessagesByTime(); // 메시지 정렬
-        _scrollToBottom(); // 메시지 추가 후 항상 스크롤 이동
+        _sortMessagesByTime();
+        _scrollToBottom();
       });
+    });
+  }
+
+  // 음성 감지 상태 변경
+  void _toggleVoiceDetection() {
+    setState(() {
+      _isVoiceDetectionEnabled = !_isVoiceDetectionEnabled;
     });
   }
 
@@ -328,19 +336,27 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     final Duration difference =
         (closestMessageTime.difference(targetTime)).abs();
 
-    if (difference.inSeconds > 3) {
-      // 3초 이상 차이가 나면 새로운 메시지를 추가하고 정렬
-      _addNewEmotionMessage(time, feature);
-    } else {
-      // 기존 메시지에 감정 추가
+    if (difference.inSeconds <= 3) {
+      // 기존 메시지에 감정을 추가
       setState(() {
         messages[closestIndex]['emotion'] = feature;
       });
-      // 메시지를 정렬 (이 경우 기존 메시지가 갱신되므로 정렬 유지됨)
-      _sortMessagesByTime();
-      // 메시지 추가 후 스크롤 이동
-      _scrollToBottom();
+    } else {
+      // 새로운 메시지를 추가하고 감정을 결합
+      final Map<String, dynamic> newMessage = {
+        'sentTime': time,
+        'text': '', // 텍스트 없이 감정만 표시
+        'label': 'emotion',
+        'emotion': feature,
+      };
+
+      setState(() {
+        messages.add(newMessage);
+        _sortMessagesByTime();
+      });
     }
+    // 메시지 추가 후 스크롤 이동
+    _scrollToBottom();
   }
 
 // 메시지 정렬 함수
@@ -402,11 +418,17 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
 
   // 음성 녹음 시작
   Future<void> _startRecording() async {
+    if (!_isVoiceDetectionEnabled) {
+      return; // 음성 감지가 비활성화된 경우 녹음을 시작하지 않음
+    }
     final stream =
         await html.window.navigator.mediaDevices!.getUserMedia({'audio': true});
     mediaRecorder = html.MediaRecorder(stream);
 
     mediaRecorder!.addEventListener('dataavailable', (event) {
+      if (!_isVoiceDetectionEnabled) {
+        return; // 음성 감지가 비활성화된 경우 데이터를 전송하지 않음
+      }
       final blob = (event as html.BlobEvent).data;
       if (blob != null) {
         final reader = html.FileReader();
@@ -587,7 +609,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         children: [
           // 왼쪽: 실시간 데이터 시각화 (1번 코드)
           Expanded(
-            flex: 2,
+            flex: 3,
             child: Column(
               children: [
                 if (!_isConnected)
@@ -829,13 +851,38 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
             flex: 1,
             child: Column(
               children: [
-                ElevatedButton(
-                  onPressed: isFullRecording
-                      ? _stopFullRecording
-                      : _startFullRecording,
-                  child: Text(isFullRecording
-                      ? "Stop Full Recording"
-                      : "Start Full Recording"),
+                // 버튼과 마이크 아이콘을 한 줄에 배치
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center, // 수직 중앙 정렬
+                  children: [
+                    // Expanded를 사용해 남은 공간을 채우고, 가운데 정렬해서 버튼을 중앙 배치
+                    Expanded(
+                      child: Center(
+                        child: ElevatedButton(
+                          onPressed: isFullRecording
+                              ? _stopFullRecording
+                              : _startFullRecording,
+                          child: Text(
+                            isFullRecording
+                                ? "Stop Full Recording"
+                                : "Start Full Recording",
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // 오른쪽에 마이크 아이콘
+                    GestureDetector(
+                      onTap: _toggleVoiceDetection,
+                      child: Image.asset(
+                        _isVoiceDetectionEnabled
+                            ? 'assets/image/mic_on.png'
+                            : 'assets/image/mic_off.png',
+                        width: 48,
+                        height: 48,
+                      ),
+                    ),
+                  ],
                 ),
                 Expanded(
                   child: messages.isEmpty
@@ -845,77 +892,112 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                           itemCount: messages.length,
                           itemBuilder: (context, index) {
                             final message = messages[index];
-                            return ListTile(
+                            final bool isMe = message['label'] == 'me';
+
+                            return GestureDetector(
                               onTap: () {
-                                // 여기에 클릭하면 해당 시간 그래프 이동하는 함수로 보내는 코드 작성.
+                                // 대화 클릭 시 해당 시간으로 그래프 이동
                                 _moveToGraphTime(message['sentTime']);
                               },
-                              title: Row(
-                                children: [
-                                  Text(
-                                    'Speaker: ',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                  GestureDetector(
-                                    onTap: () async {
-                                      final newValue = await showDialog<String>(
-                                        context: context,
-                                        builder: (context) {
-                                          return SimpleDialog(
-                                            title: Text('Select Label'),
-                                            children: [
-                                              'me',
-                                              'another',
-                                              'unknown'
-                                            ]
-                                                .map((label) =>
-                                                    SimpleDialogOption(
-                                                      onPressed: () {
-                                                        Navigator.pop(
-                                                            context, label);
-                                                      },
-                                                      child: Text(label),
-                                                    ))
-                                                .toList(),
-                                          );
-                                        },
-                                      );
-                                      if (newValue != null &&
-                                          newValue.isNotEmpty) {
-                                        setState(() {
-                                          message['label'] = newValue;
-                                        });
-                                        print("Label updated to: $newValue");
-                                      }
-                                    },
-                                    child: Text(
-                                      message['label'],
-                                      style: TextStyle(
-                                        color: message['label'] == 'me'
-                                            ? Colors.blue
-                                            : Colors.green,
-                                        decoration: TextDecoration.underline,
+                              onLongPress: () async {
+                                // 라벨 수정 기능 (길게 눌렀을 때 동작)
+                                final newValue = await showDialog<String>(
+                                  context: context,
+                                  builder: (context) {
+                                    return SimpleDialog(
+                                      title: Text('Select Label'),
+                                      children: [
+                                        'me',
+                                        'another',
+                                        'unknown',
+                                      ]
+                                          .map((label) => SimpleDialogOption(
+                                                onPressed: () {
+                                                  Navigator.pop(context, label);
+                                                },
+                                                child: Text(label),
+                                              ))
+                                          .toList(),
+                                    );
+                                  },
+                                );
+                                if (newValue != null && newValue.isNotEmpty) {
+                                  setState(() {
+                                    message['label'] = newValue;
+                                  });
+                                  print("Label updated to: $newValue");
+                                }
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(
+                                    vertical: 5, horizontal: 10),
+                                alignment: isMe
+                                    ? Alignment.centerRight
+                                    : Alignment.centerLeft, // 정렬
+                                child: Column(
+                                  crossAxisAlignment: isMe
+                                      ? CrossAxisAlignment.end
+                                      : CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      constraints: BoxConstraints(
+                                        maxWidth:
+                                            MediaQuery.of(context).size.width *
+                                                0.6, // 최대 너비 제한
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isMe
+                                            ? Colors.blue.shade100
+                                            : Colors.grey.shade200, // 배경색
+                                        borderRadius: BorderRadius.only(
+                                          topLeft: Radius.circular(12),
+                                          topRight: Radius.circular(12),
+                                          bottomLeft: isMe
+                                              ? Radius.circular(12)
+                                              : Radius.zero,
+                                          bottomRight: isMe
+                                              ? Radius.zero
+                                              : Radius.circular(12),
+                                        ),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            message['text'],
+                                            style: TextStyle(
+                                                fontSize: 16,
+                                                color: Colors.black),
+                                          ),
+                                          if (message['emotion'] != null)
+                                            Text(
+                                              'Emotion: ${message['emotion']}',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontStyle: FontStyle.italic,
+                                                color: Colors.blueGrey,
+                                              ),
+                                            ),
+                                          Text(
+                                            "Speaker: ${message['label']}",
+                                            style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.black54),
+                                          ),
+                                          Text(
+                                            "Sent Time: ${message['sentTime']}",
+                                            style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(message['text']),
-                                  Text("Sent Time: ${message['sentTime']}",
-                                      style: TextStyle(
-                                          fontSize: 12, color: Colors.grey)),
-                                  if (message['emotion'] != null) // 감정 표시
-                                    Text(
-                                      'Emotion: ${message['emotion']}',
-                                      style: TextStyle(
-                                          color: Colors.blue,
-                                          fontStyle: FontStyle.italic),
-                                    ),
-                                ],
+                                  ],
+                                ),
                               ),
                             );
                           },
