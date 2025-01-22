@@ -9,10 +9,6 @@ import 'dart:convert'; // JSON 인코딩/디코딩
 import 'dart:html' as html;
 import 'dart:js' as js;
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
-import 'package:syncfusion_flutter_charts/charts.dart';
-import 'package:syncfusion_flutter_sliders/sliders.dart';
-import 'package:intl/intl.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter/rendering.dart';
 
@@ -32,7 +28,20 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Combined Dashboard',
-      theme: ThemeData(primarySwatch: Colors.blue),
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true, // 만약 Material3 쓰신다면...
+        appBarTheme: AppBarTheme(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          // surfaceTintColor도 3.7+ 버전에서는 필요할 수 있음
+          surfaceTintColor: Colors.transparent,
+          iconTheme: IconThemeData(color: Colors.black),
+          titleTextStyle: TextStyle(color: Colors.black, fontSize: 20),
+        ),
+      ),
       home: CombinedDashboard(),
       debugShowCheckedModeBanner: false,
     );
@@ -56,7 +65,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   bool _isConnectionAccepted = false;
   String _patientName = '';
 
-  // 실시간 데이터 관련 상태 (1번 코드)
+  // 실시간 데이터 관련 상태
   List<ChartSampleData> chartData1 = [];
   List<ChartSampleData> chartData2 = [];
   List<ChartSampleData> chartData3 = [];
@@ -72,7 +81,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     Icons.star,
   ]; // Line과 Curve 변경 아이콘
 
-  // 음성 녹음 관련 상태 (2번 코드)
+  // 음성 녹음 관련 상태
   bool isRecording = false;
   bool isFullRecording = false;
   List<Map<String, dynamic>> messages = [];
@@ -85,7 +94,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     super.initState();
     _initializeAudioProcessing();
 
-    // 1번 코드 초기화
+    // 그래프 초기화
     _zoomPanBehavior = ZoomPanBehavior(
       enablePinching: true,
       enableDoubleTapZooming: true,
@@ -98,11 +107,10 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
       end: DateTime.now(),
     );
 
-    // 2번 코드 WebSocket 초기화
+    // WebSocket 메시지 수신 리스너
     dataChannel.stream.listen((message) {
       final decodedMessage = json.decode(message);
       setState(() {
-        // 메시지 처리 로직
         if (decodedMessage is List) {
           for (var data in decodedMessage) {
             String text = data['text'] ?? '';
@@ -138,7 +146,28 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   void _toggleVoiceDetection() {
     setState(() {
       _isVoiceDetectionEnabled = !_isVoiceDetectionEnabled;
+
+      if (!_isVoiceDetectionEnabled && isFullRecording) {
+        _stopFullRecording();
+        _showAlert("마이크가 꺼져 녹음이 중단되었습니다.");
+      }
     });
+  }
+
+  void _showAlert(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("알림"),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("확인"),
+          ),
+        ],
+      ),
+    );
   }
 
   void _initializeAudioProcessing() {
@@ -232,8 +261,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     // 즉시 데이터 리스너
     socket!.on('data_update', (data) {
       if (_isStreaming) {
-        // print(data);
-
         double newValue = double.parse(data['value'].toString());
         String sensor = data['sensor'];
         DateTime serverTime = data.containsKey('time')
@@ -245,16 +272,12 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         } else if (sensor == 'data3') {
           _updateChartData3(newValue, serverTime);
         }
-
-        // debugPrint(            "Received immediate data update: sensor=$sensor, value=$newValue, time=$serverTime");
       }
     });
 
     // 배치 데이터 리스너
     socket!.on('data_update_batch', (data) {
       if (_isStreaming) {
-        // print(data);
-
         if (data.containsKey('data1_batch')) {
           List<dynamic> batch = data['data1_batch'];
 
@@ -279,52 +302,32 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
       }
     });
 
+    // 감정(특징) 분석 결과
     socket!.on('feature_detect', (data) {
-      print(data);
       final Map<String, dynamic> receivedData = data;
       final String time = receivedData['time'] as String;
       final String feature = receivedData['feature'] as String;
-      print("time: $time");
-      print("feature: $feature");
-      // 가장 가까운 메시지에 감정을 추가하거나 새로운 메시지 생성
+      // 가장 가까운 메시지에 감정을 추가 or 새 메시지 생성
       _addEmotionToClosestMessage(time, feature);
     });
   }
 
-// ----------------------------------------
+  // 메시지에 감정 태그 추가하는 로직
   int _findClosestMessageIndex(String time) {
     final DateTime targetTime = DateFormat('HH:mm:ss').parse(time);
     int closestIndex = 0;
-    Duration smallestDifference = Duration(hours: 24); // 초기값으로 큰 값 설정
+    Duration smallestDifference = Duration(hours: 24);
 
     for (int i = 0; i < messages.length; i++) {
       final DateTime messageTime =
           DateFormat('HH:mm:ss').parse(messages[i]['sentTime']);
       final Duration difference = (messageTime.difference(targetTime)).abs();
-
       if (difference < smallestDifference) {
         smallestDifference = difference;
         closestIndex = i;
       }
     }
     return closestIndex;
-  }
-
-  void _addNewEmotionMessage(String time, String feature) {
-    final Map<String, dynamic> newMessage = {
-      'sentTime': time,
-      'text': '', // 텍스트 없이 감정만 표시
-      'label': 'emotion',
-      'emotion': feature,
-    };
-
-    setState(() {
-      // 새로운 메시지를 추가하며 정렬
-      messages.add(newMessage);
-      _sortMessagesByTime();
-    });
-    // 메시지 추가 후 스크롤 이동
-    _scrollToBottom();
   }
 
   void _addEmotionToClosestMessage(String time, String feature) {
@@ -342,39 +345,33 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         messages[closestIndex]['emotion'] = feature;
       });
     } else {
-      // 새로운 메시지를 추가하고 감정을 결합
+      // 새로운 메시지를 추가
       final Map<String, dynamic> newMessage = {
         'sentTime': time,
-        'text': '', // 텍스트 없이 감정만 표시
+        'text': '',
         'label': 'emotion',
         'emotion': feature,
       };
-
       setState(() {
         messages.add(newMessage);
         _sortMessagesByTime();
       });
     }
-    // 메시지 추가 후 스크롤 이동
     _scrollToBottom();
   }
 
-// 메시지 정렬 함수
+  // 메시지 시간 정렬
   void _sortMessagesByTime() {
     messages.sort((a, b) {
       final DateTime timeA = DateFormat('HH:mm:ss').parse(a['sentTime']);
       final DateTime timeB = DateFormat('HH:mm:ss').parse(b['sentTime']);
-
-      int result = timeA.compareTo(timeB);
-      print(result);
-
-      return result;
+      return timeA.compareTo(timeB);
     });
   }
 
-// -------------------------------------------------
+  // 그래프 업데이트 (Data1)
   void _updateChartData1(double data1, DateTime time) async {
-    await Future.delayed(Duration.zero); // 비동기 처리
+    await Future.delayed(Duration.zero);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       setState(() {
         chartData1.add(ChartSampleData(x: time, y: data1));
@@ -388,8 +385,9 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     });
   }
 
+  // 그래프 업데이트 (Data2)
   void _updateChartData2(double data2, DateTime time) async {
-    await Future.delayed(Duration.zero); // 비동기 처리
+    await Future.delayed(Duration.zero);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       setState(() {
         chartData2.add(ChartSampleData(x: time, y: data2));
@@ -403,14 +401,13 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     });
   }
 
+  // 그래프 업데이트 (Data3)
   void _updateChartData3(double data3, DateTime time) {
     setState(() {
       chartData3.add(ChartSampleData(x: time, y: data3));
-
       if (chartData3.length > data_keep_count) {
         chartData3.removeAt(0);
       }
-
       rangeController.start = chartData3.last.x.subtract(Duration(seconds: 5));
       rangeController.end = chartData3.last.x;
     });
@@ -419,7 +416,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   // 음성 녹음 시작
   Future<void> _startRecording() async {
     if (!_isVoiceDetectionEnabled) {
-      return; // 음성 감지가 비활성화된 경우 녹음을 시작하지 않음
+      return; // 음성 감지 비활성화 시 녹음 시작 안 함
     }
     final stream =
         await html.window.navigator.mediaDevices!.getUserMedia({'audio': true});
@@ -427,7 +424,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
 
     mediaRecorder!.addEventListener('dataavailable', (event) {
       if (!_isVoiceDetectionEnabled) {
-        return; // 음성 감지가 비활성화된 경우 데이터를 전송하지 않음
+        return;
       }
       final blob = (event as html.BlobEvent).data;
       if (blob != null) {
@@ -435,21 +432,15 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         reader.readAsArrayBuffer(blob);
         reader.onLoadEnd.listen((e) {
           final bytes = reader.result as Uint8List;
-
           final currentTime =
               DateTime.now().toIso8601String().substring(11, 19);
-          print("Sending audio data of length: ${bytes.length}");
 
           final data = {
             "audio": bytes,
             "sentTime": currentTime,
           };
-
           dataChannel.sink.add(json.encode(data));
-          print("Audio data sent to server with time: $currentTime");
         });
-      } else {
-        print("No data available in the blob.");
       }
     });
 
@@ -480,12 +471,8 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         reader.readAsArrayBuffer(blob);
         reader.onLoadEnd.listen((e) {
           final bytes = reader.result as Uint8List;
-
-          fullAudioData.add(bytes); // 전체 오디오 데이터를 저장
-          print("Recording full audio data of length: ${bytes.length}");
+          fullAudioData.add(bytes); // 전체 오디오 데이터 누적
         });
-      } else {
-        print("No data available in the blob.");
       }
     });
 
@@ -495,48 +482,36 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     });
   }
 
-  // 전체 오디오 녹음 정지 및 전송
+  // 전체 오디오 녹음 정지 + 전송
   void _stopFullRecording() async {
     fullMediaRecorder?.stop();
     setState(() {
       isFullRecording = false;
     });
 
-    // 딜레이 추가
     await Future.delayed(Duration(seconds: 1));
 
-    // 전체 오디오 데이터를 WebSocket 서버로 전송
     if (fullAudioData.isNotEmpty) {
       final timeOnly = DateTime.now().toIso8601String().substring(11, 19);
       final data = {
-        "audio": fullAudioData, // 전체 오디오 데이터를 전송
+        "audio": fullAudioData,
         "sentTime": timeOnly,
       };
-
       fullAudioChannel.sink.add(json.encode(data));
-      print("Full audio data sent to server with time: $timeOnly");
-
-      // 전체 오디오 데이터 초기화
       fullAudioData.clear();
-    } else if (fullAudioData.isEmpty) {
-      print("empty");
     }
-
-    print("Full recording stopped.");
   }
 
   void _startDataTransmission() {
     setState(() {
       _isStreaming = true;
       if (chartData1.isNotEmpty) {
-        _currentDate = chartData1.last.x; // 마지막 시간으로 초기화
+        _currentDate = chartData1.last.x;
       }
     });
-
     _setUpDataUpdateListener();
     if (socket != null && socket!.connected) {
       socket!.emit('start');
-      debugPrint("Data transmission started");
     }
   }
 
@@ -551,19 +526,17 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
       });
       socket!.emit('stop');
       socket!.off('data_update');
-      debugPrint("Data transmission stopped");
     }
   }
 
+  // 특정 메시지 클릭 시 해당 그래프 시간으로 이동
   void _moveToGraphTime(String selectedTime) {
     try {
-      // Parse the String (e.g., "21:11:06") into a DateTime
       List<String> parts = selectedTime.split(":");
       int hours = int.parse(parts[0]);
       int minutes = int.parse(parts[1]);
       int seconds = int.parse(parts[2]);
 
-      // Create a DateTime using today's date with the parsed time
       DateTime parsedTime = DateTime(
         DateTime.now().year,
         DateTime.now().month,
@@ -574,7 +547,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
       );
 
       setState(() {
-        // Use the parsed DateTime to update the rangeController
         rangeController.start = parsedTime.subtract(Duration(seconds: 5));
         rangeController.end = parsedTime.add(Duration(seconds: 5));
       });
@@ -587,9 +559,13 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.transparent, // 완전 투명
+        elevation: 0, // 그림자 제거
+        scrolledUnderElevation: 0, // 추가
+
         title: Text("사용자 데이터 그래프"),
         actions: [
-          // 그래프 유형 전환 아이콘 버튼
+          // 그래프 유형 전환 (Line <-> Curve)
           IconButton(
             icon: Icon(
               _icons[_currentIconIndex],
@@ -598,7 +574,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
             onPressed: () {
               setState(() {
                 _currentIconIndex = (_currentIconIndex + 1) % _icons.length;
-                _isLineChart = !_isLineChart; // Line/Curve 전환
+                _isLineChart = !_isLineChart;
               });
             },
             tooltip: _isLineChart ? "Switch to Curve" : "Switch to Line",
@@ -607,7 +583,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
       ),
       body: Row(
         children: [
-          // 왼쪽: 실시간 데이터 시각화 (1번 코드)
+          // 왼쪽: 그래프 영역
           Expanded(
             flex: 3,
             child: Column(
@@ -662,7 +638,8 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                       ),
                     ],
                   ),
-                // 첫 번째 그래프 - chartData1만 사용
+
+                // 세 개의 그래프 (Data1, Data2, Data3)
                 Expanded(
                   flex: 1,
                   child: SfCartesianChart(
@@ -680,7 +657,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                               xValueMapper: (ChartSampleData data, _) => data.x,
                               yValueMapper: (ChartSampleData data, _) => data.y,
                               color: Colors.blue,
-                              animationDuration: 0, // 애니메이션 비활성화
+                              animationDuration: 0,
                             ),
                           ]
                         : [
@@ -689,12 +666,11 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                               xValueMapper: (ChartSampleData data, _) => data.x,
                               yValueMapper: (ChartSampleData data, _) => data.y,
                               color: Colors.blue,
-                              animationDuration: 0, // 애니메이션 비활성화
+                              animationDuration: 0,
                             ),
                           ],
                   ),
                 ),
-                // 두 번째 그래프 - chartData2만 사용
                 Expanded(
                   flex: 1,
                   child: SfCartesianChart(
@@ -724,7 +700,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                           ],
                   ),
                 ),
-                // 세 번째 그래프 - chartData3만 사용
                 Expanded(
                   flex: 1,
                   child: SfCartesianChart(
@@ -754,6 +729,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                           ],
                   ),
                 ),
+
                 // 아래의 기간 선택기 그래프 - 모든 데이터를 포함
                 Expanded(
                   flex: 1,
@@ -846,173 +822,298 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
               ],
             ),
           ),
-          // 오른쪽: 음성 관련 데이터 표시 (2번 코드)
+
+          // 오른쪽: 음성 채팅/메시지 영역
+          // 오른쪽: 음성 채팅/메시지 영역
           Expanded(
             flex: 1,
-            child: Column(
-              children: [
-                // 버튼과 마이크 아이콘을 한 줄에 배치
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center, // 수직 중앙 정렬
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // 이 builder 안에서 constraints.maxWidth => 오른쪽 패널의 실제 너비
+                return Column(
                   children: [
-                    // Expanded를 사용해 남은 공간을 채우고, 가운데 정렬해서 버튼을 중앙 배치
-                    Expanded(
-                      child: Center(
-                        child: ElevatedButton(
-                          onPressed: isFullRecording
-                              ? _stopFullRecording
-                              : _startFullRecording,
-                          child: Text(
-                            isFullRecording
-                                ? "Stop Full Recording"
-                                : "Start Full Recording",
+                    // (1) 윗부분: 버튼 + 마이크 아이콘 (기존 코드 그대로)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Center(
+                            child: ElevatedButton(
+                              onPressed:
+                                  (_isVoiceDetectionEnabled && !isFullRecording)
+                                      ? _startFullRecording
+                                      : (_isVoiceDetectionEnabled &&
+                                              isFullRecording)
+                                          ? _stopFullRecording
+                                          : null,
+                              child: Text(
+                                isFullRecording
+                                    ? "Stop Full Recording"
+                                    : "Start Full Recording",
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        GestureDetector(
+                          onTap: _toggleVoiceDetection,
+                          child: Image.asset(
+                            _isVoiceDetectionEnabled
+                                ? 'assets/image/mic_on.png'
+                                : 'assets/image/mic_off.png',
+                            width: 48,
+                            height: 48,
+                          ),
+                        ),
+                      ],
                     ),
 
-                    // 오른쪽에 마이크 아이콘
-                    GestureDetector(
-                      onTap: _toggleVoiceDetection,
-                      child: Image.asset(
-                        _isVoiceDetectionEnabled
-                            ? 'assets/image/mic_on.png'
-                            : 'assets/image/mic_off.png',
-                        width: 48,
-                        height: 48,
-                      ),
+                    // (2) 아래부분: 메시지 리스트
+                    Expanded(
+                      child: messages.isEmpty
+                          ? Center(child: Text('No data available'))
+                          : ListView.builder(
+                              controller: _scrollController,
+                              itemCount: messages.length,
+                              itemBuilder: (context, index) {
+                                // 여기서 constraints.maxWidth를 _buildChatBubble에 넘김
+                                return _buildChatBubble(
+                                  context,
+                                  index,
+                                  constraints.maxWidth, // 우측 영역 실제 너비
+                                );
+                              },
+                            ),
                     ),
                   ],
-                ),
-                Expanded(
-                  child: messages.isEmpty
-                      ? Center(child: Text('No data available'))
-                      : ListView.builder(
-                          controller: _scrollController, // ScrollController 설정
-                          itemCount: messages.length,
-                          itemBuilder: (context, index) {
-                            final message = messages[index];
-                            final bool isMe = message['label'] == 'me';
-
-                            return GestureDetector(
-                              onTap: () {
-                                // 대화 클릭 시 해당 시간으로 그래프 이동
-                                _moveToGraphTime(message['sentTime']);
-                              },
-                              onLongPress: () async {
-                                // 라벨 수정 기능 (길게 눌렀을 때 동작)
-                                final newValue = await showDialog<String>(
-                                  context: context,
-                                  builder: (context) {
-                                    return SimpleDialog(
-                                      title: Text('Select Label'),
-                                      children: [
-                                        'me',
-                                        'another',
-                                        'unknown',
-                                      ]
-                                          .map((label) => SimpleDialogOption(
-                                                onPressed: () {
-                                                  Navigator.pop(context, label);
-                                                },
-                                                child: Text(label),
-                                              ))
-                                          .toList(),
-                                    );
-                                  },
-                                );
-                                if (newValue != null && newValue.isNotEmpty) {
-                                  setState(() {
-                                    message['label'] = newValue;
-                                  });
-                                  print("Label updated to: $newValue");
-                                }
-                              },
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(
-                                    vertical: 5, horizontal: 10),
-                                alignment: isMe
-                                    ? Alignment.centerRight
-                                    : Alignment.centerLeft, // 정렬
-                                child: Column(
-                                  crossAxisAlignment: isMe
-                                      ? CrossAxisAlignment.end
-                                      : CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(10),
-                                      constraints: BoxConstraints(
-                                        maxWidth:
-                                            MediaQuery.of(context).size.width *
-                                                0.6, // 최대 너비 제한
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: isMe
-                                            ? Colors.blue.shade100
-                                            : Colors.grey.shade200, // 배경색
-                                        borderRadius: BorderRadius.only(
-                                          topLeft: Radius.circular(12),
-                                          topRight: Radius.circular(12),
-                                          bottomLeft: isMe
-                                              ? Radius.circular(12)
-                                              : Radius.zero,
-                                          bottomRight: isMe
-                                              ? Radius.zero
-                                              : Radius.circular(12),
-                                        ),
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            message['text'],
-                                            style: TextStyle(
-                                                fontSize: 16,
-                                                color: Colors.black),
-                                          ),
-                                          if (message['emotion'] != null)
-                                            Text(
-                                              'Emotion: ${message['emotion']}',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontStyle: FontStyle.italic,
-                                                color: Colors.blueGrey,
-                                              ),
-                                            ),
-                                          Text(
-                                            "Speaker: ${message['label']}",
-                                            style: TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.black54),
-                                          ),
-                                          Text(
-                                            "Sent Time: ${message['sentTime']}",
-                                            style: TextStyle(
-                                                fontSize: 12,
-                                                color: Colors.grey),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
+                );
+              },
             ),
           ),
         ],
       ),
     );
   }
+
+  // -- [1] 메시지 빌드 함수 ------------------------------------------------
+  Widget _buildChatBubble(BuildContext context, int index, double parentWidth) {
+    final message = messages[index];
+    final bool isMe = (message['label'] == 'me');
+
+    return GestureDetector(
+      onTap: () {
+        // 메시지 클릭 시 그래프 이동
+        _moveToGraphTime(message['sentTime']);
+      },
+      onLongPress: () async {
+        // 라벨 수정 기능
+        final newValue = await showDialog<String>(
+          context: context,
+          builder: (context) {
+            return SimpleDialog(
+              title: Text('Select Label'),
+              children: [
+                'me',
+                'another',
+                'unknown',
+              ].map((label) {
+                return SimpleDialogOption(
+                  onPressed: () {
+                    Navigator.pop(context, label);
+                  },
+                  child: Text(label),
+                );
+              }).toList(),
+            );
+          },
+        );
+        if (newValue != null && newValue.isNotEmpty) {
+          setState(() {
+            message['label'] = newValue;
+          });
+        }
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+        // isMe에 따라 왼쪽/오른쪽 말풍선 구분
+        child: isMe
+            ? _buildRightBubble(context, message, parentWidth)
+            : _buildLeftBubble(context, message, parentWidth),
+      ),
+    );
+  }
+
+// -- [2] 왼쪽 말풍선 (KK + 파란말풍선) -------------------------------------
+  Widget _buildLeftBubble(
+      BuildContext context, Map<String, dynamic> message, double parentWidth) {
+    // unknown인지 판단
+    final bool isUnknown = (message['label'] == 'unknown');
+
+    // unknown이면 회색+50% 투명, 아니면 파란색
+    final bubbleColor =
+        isUnknown ? Colors.grey.shade400.withOpacity(0.3) : Colors.blue;
+
+    // unknown이면 텍스트 색상도 조금 어둡고 투명하게
+    final textColor = isUnknown
+        ? const Color.fromARGB(221, 63, 63, 63).withOpacity(0.5)
+        : Colors.white;
+
+    // emotion 부분도 유사하게
+    final emotionColor =
+        isUnknown ? Colors.black54.withOpacity(0.3) : Colors.white70;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // KK 프로필 (CircleAvatar)
+        CircleAvatar(
+          backgroundColor:
+              isUnknown ? Colors.grey.withOpacity(0.5) : Colors.blue,
+          child: Text(
+            isUnknown ? '??' : '다른', // unknown이면 '??'
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+        SizedBox(width: 8),
+
+        // 말풍선 + 시간
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              constraints: BoxConstraints(
+                maxWidth: parentWidth * 0.35,
+              ),
+              decoration: BoxDecoration(
+                color: bubbleColor, // 수정된 배경색
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message['text'] ?? '',
+                    softWrap: true, // 화면 너비가 모자라면 자동 줄바꿈
+                    maxLines: null, // 줄 수 제한 없음 (길면 여러 줄)
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: textColor, // 수정된 텍스트 색
+                    ),
+                  ),
+                  if (message['emotion'] != null)
+                    Text(
+                      'Emotion: ${message['emotion']}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                        color: emotionColor, // 감정 표기 색상도 투명도 적용 가능
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            SizedBox(height: 4),
+            Text(
+              message['sentTime'] ?? '',
+              style: TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // -- [3] 오른쪽 말풍선 (흰 말풍선 + 보라 원 아이콘) -------------------------
+  Widget _buildRightBubble(
+      BuildContext context, Map<String, dynamic> message, double parentWidth) {
+    // unknown인지 판단
+    final bool isUnknown = (message['label'] == 'unknown');
+
+    // unknown이면 좀 더 흐린 회색, 아니면 흰 말풍선
+    final bubbleColor = isUnknown ? Colors.grey.shade300 : Colors.white;
+    // unknown이면 텍스트색도 좀 더 어두운색
+    final textColor =
+        isUnknown ? const Color.fromARGB(255, 133, 133, 133) : Colors.black87;
+    final emotionColor = isUnknown ? Colors.grey : Colors.blueGrey;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 말풍선 + 시간
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              constraints: BoxConstraints(
+                maxWidth: parentWidth * 0.35,
+              ),
+              decoration: BoxDecoration(
+                color: bubbleColor,
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.shade300,
+                    offset: Offset(0, 1),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message['text'] ?? '',
+                    style: TextStyle(fontSize: 16, color: textColor),
+                  ),
+                  if (message['emotion'] != null)
+                    Text(
+                      'Emotion: ${message['emotion']}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                        color: emotionColor,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            SizedBox(height: 4),
+            Text(
+              message['sentTime'] ?? '',
+              style: TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+          ],
+        ),
+
+        SizedBox(width: 8),
+
+        // 보라색 원형 아이콘
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: isUnknown ? Colors.grey : Colors.purple,
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(
+              isUnknown ? '??' : '나',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-// 실시간 데이터 및 오디오 관련 구조체 (예시)
+// 차트용 데이터 구조
 class ChartSampleData {
   ChartSampleData({required this.x, required this.y});
   final DateTime x;
