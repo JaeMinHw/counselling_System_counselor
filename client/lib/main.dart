@@ -5,12 +5,15 @@ import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:syncfusion_flutter_core/core.dart';
 import 'package:syncfusion_flutter_sliders/sliders.dart';
 import 'package:intl/intl.dart';
-import 'dart:convert'; // JSON 인코딩/디코딩
+import 'dart:convert';
 import 'dart:html' as html;
 import 'dart:js' as js;
 import 'dart:typed_data';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter/rendering.dart';
+
+// <-- colors.dart import!! (AppColors 정의가 여기에 있다고 가정)
+import 'theme/colors.dart';
 
 // WebSocket 채널 설정
 final WebSocketChannel dataChannel =
@@ -31,12 +34,11 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true, // 만약 Material3 쓰신다면...
+        useMaterial3: true,
         appBarTheme: AppBarTheme(
           backgroundColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
-          // surfaceTintColor도 3.7+ 버전에서는 필요할 수 있음
           surfaceTintColor: Colors.transparent,
           iconTheme: IconThemeData(color: Colors.black),
           titleTextStyle: TextStyle(color: Colors.black, fontSize: 20),
@@ -54,10 +56,8 @@ class CombinedDashboard extends StatefulWidget {
 }
 
 class _CombinedDashboardState extends State<CombinedDashboard> {
-  // ScrollController 추가
   final ScrollController _scrollController = ScrollController();
-  // 음성 감지 상태 추가
-  bool _isVoiceDetectionEnabled = true; // 음성 감지 초기값 (활성화)
+  bool _isVoiceDetectionEnabled = true;
   int data_keep_count = 100000;
   IO.Socket? socket;
   bool _isConnected = false;
@@ -65,23 +65,21 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   bool _isConnectionAccepted = false;
   String _patientName = '';
 
-  // 실시간 데이터 관련 상태
   List<ChartSampleData> chartData1 = [];
   List<ChartSampleData> chartData2 = [];
   List<ChartSampleData> chartData3 = [];
   late RangeController rangeController;
   DateTime _currentDate = DateTime.now();
   bool isStreaming = false;
-  bool _isStreaming = false; // 데이터를 스트리밍 중인지 확인하는 플래그
+  bool _isStreaming = false;
   bool _isLineChart = true;
   late ZoomPanBehavior _zoomPanBehavior;
   int _currentIconIndex = 0;
   List<IconData> _icons = [
     Icons.auto_graph_rounded,
     Icons.star,
-  ]; // Line과 Curve 변경 아이콘
+  ];
 
-  // 음성 녹음 관련 상태
   bool isRecording = false;
   bool isFullRecording = false;
   List<Map<String, dynamic>> messages = [];
@@ -94,7 +92,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     super.initState();
     _initializeAudioProcessing();
 
-    // 그래프 초기화
     _zoomPanBehavior = ZoomPanBehavior(
       enablePinching: true,
       enableDoubleTapZooming: true,
@@ -107,7 +104,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
       end: DateTime.now(),
     );
 
-    // WebSocket 메시지 수신 리스너
+    // WebSocket 메시지 수신
     dataChannel.stream.listen((message) {
       final decodedMessage = json.decode(message);
       setState(() {
@@ -142,11 +139,9 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     });
   }
 
-  // 음성 감지 상태 변경
   void _toggleVoiceDetection() {
     setState(() {
       _isVoiceDetectionEnabled = !_isVoiceDetectionEnabled;
-
       if (!_isVoiceDetectionEnabled && isFullRecording) {
         _stopFullRecording();
         _showAlert("마이크가 꺼져 녹음이 중단되었습니다.");
@@ -171,7 +166,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   }
 
   void _initializeAudioProcessing() {
-    js.context.callMethod('startAudioProcessing'); // 외부 VAD 호출
+    js.context.callMethod('startAudioProcessing');
 
     html.window.addEventListener('audioStarted', (event) {
       if (!isRecording) {
@@ -188,14 +183,13 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
 
   @override
   void dispose() {
-    _scrollController.dispose(); // ScrollController 해제
+    _scrollController.dispose();
     dataChannel.sink.close();
     fullAudioChannel.sink.close();
     rangeController.dispose();
     super.dispose();
   }
 
-  // 메시지 추가 시 스크롤 이동
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -205,8 +199,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   }
 
   void _connectWebSocket() {
-    debugPrint("Attempting to connect to WebSocket...");
-
     socket = IO.io(
       'ws://218.151.124.83:5000',
       IO.OptionBuilder()
@@ -221,7 +213,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
       setState(() {
         _isConnected = true;
       });
-      debugPrint('Connected to the server');
       socket!.emit('counselor_login', {'counselor_id': '1'});
     });
 
@@ -231,7 +222,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         _isConnectionRequested = false;
         _isConnectionAccepted = false;
       });
-      debugPrint('Disconnected from the server');
     });
 
     socket!.on('connection_request', (data) {
@@ -239,7 +229,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         _isConnectionRequested = true;
         _patientName = data['message'];
       });
-      debugPrint('Connection requested by patient: $_patientName');
     });
 
     socket!.on('connection_accepted', (data) {
@@ -247,7 +236,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         _isConnectionRequested = false;
         _isConnectionAccepted = true;
       });
-      debugPrint('Connection accepted by server');
     });
 
     _setUpDataUpdateListener();
@@ -255,10 +243,9 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   }
 
   void _setUpDataUpdateListener() {
-    socket!.off('data_update'); // 기존 리스너 제거
-    socket!.off('data_update_batch'); // 배치 리스너 제거
+    socket!.off('data_update');
+    socket!.off('data_update_batch');
 
-    // 즉시 데이터 리스너
     socket!.on('data_update', (data) {
       if (_isStreaming) {
         double newValue = double.parse(data['value'].toString());
@@ -275,7 +262,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
       }
     });
 
-    // 배치 데이터 리스너
     socket!.on('data_update_batch', (data) {
       if (_isStreaming) {
         if (data.containsKey('data1_batch')) {
@@ -292,27 +278,20 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
               } catch (e) {
                 debugPrint('Error parsing batch entry: $e');
               }
-            } else {
-              debugPrint('Invalid batch entry: $entry');
             }
           }
-        } else {
-          debugPrint('Invalid batch format received: $data');
         }
       }
     });
 
-    // 감정(특징) 분석 결과
     socket!.on('feature_detect', (data) {
       final Map<String, dynamic> receivedData = data;
       final String time = receivedData['time'] as String;
       final String feature = receivedData['feature'] as String;
-      // 가장 가까운 메시지에 감정을 추가 or 새 메시지 생성
       _addEmotionToClosestMessage(time, feature);
     });
   }
 
-  // 메시지에 감정 태그 추가하는 로직
   int _findClosestMessageIndex(String time) {
     final DateTime targetTime = DateFormat('HH:mm:ss').parse(time);
     int closestIndex = 0;
@@ -340,12 +319,10 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         (closestMessageTime.difference(targetTime)).abs();
 
     if (difference.inSeconds <= 3) {
-      // 기존 메시지에 감정을 추가
       setState(() {
         messages[closestIndex]['emotion'] = feature;
       });
     } else {
-      // 새로운 메시지를 추가
       final Map<String, dynamic> newMessage = {
         'sentTime': time,
         'text': '',
@@ -360,7 +337,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     _scrollToBottom();
   }
 
-  // 메시지 시간 정렬
   void _sortMessagesByTime() {
     messages.sort((a, b) {
       final DateTime timeA = DateFormat('HH:mm:ss').parse(a['sentTime']);
@@ -369,7 +345,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     });
   }
 
-  // 그래프 업데이트 (Data1)
   void _updateChartData1(double data1, DateTime time) async {
     await Future.delayed(Duration.zero);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -385,7 +360,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     });
   }
 
-  // 그래프 업데이트 (Data2)
   void _updateChartData2(double data2, DateTime time) async {
     await Future.delayed(Duration.zero);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -401,7 +375,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     });
   }
 
-  // 그래프 업데이트 (Data3)
   void _updateChartData3(double data3, DateTime time) {
     setState(() {
       chartData3.add(ChartSampleData(x: time, y: data3));
@@ -413,10 +386,9 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     });
   }
 
-  // 음성 녹음 시작
   Future<void> _startRecording() async {
     if (!_isVoiceDetectionEnabled) {
-      return; // 음성 감지 비활성화 시 녹음 시작 안 함
+      return;
     }
     final stream =
         await html.window.navigator.mediaDevices!.getUserMedia({'audio': true});
@@ -450,7 +422,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     });
   }
 
-  // 음성 녹음 정지
   void _stopRecording() {
     mediaRecorder?.stop();
     setState(() {
@@ -458,7 +429,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     });
   }
 
-  // 전체 오디오 녹음 시작
   Future<void> _startFullRecording() async {
     final stream =
         await html.window.navigator.mediaDevices!.getUserMedia({'audio': true});
@@ -471,7 +441,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         reader.readAsArrayBuffer(blob);
         reader.onLoadEnd.listen((e) {
           final bytes = reader.result as Uint8List;
-          fullAudioData.add(bytes); // 전체 오디오 데이터 누적
+          fullAudioData.add(bytes);
         });
       }
     });
@@ -482,7 +452,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     });
   }
 
-  // 전체 오디오 녹음 정지 + 전송
   void _stopFullRecording() async {
     fullMediaRecorder?.stop();
     setState(() {
@@ -529,7 +498,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     }
   }
 
-  // 특정 메시지 클릭 시 해당 그래프 시간으로 이동
   void _moveToGraphTime(String selectedTime) {
     try {
       List<String> parts = selectedTime.split(":");
@@ -559,13 +527,11 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.transparent, // 완전 투명
-        elevation: 0, // 그림자 제거
-        scrolledUnderElevation: 0, // 추가
-
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         title: Text("사용자 데이터 그래프"),
         actions: [
-          // 그래프 유형 전환 (Line <-> Curve)
           IconButton(
             icon: Icon(
               _icons[_currentIconIndex],
@@ -583,7 +549,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
       ),
       body: Row(
         children: [
-          // 왼쪽: 그래프 영역
+          // 왼쪽(그래프)
           Expanded(
             flex: 3,
             child: Column(
@@ -639,11 +605,12 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                     ],
                   ),
 
-                // 세 개의 그래프 (Data1, Data2, Data3)
+                // 3개 그래프 + RangeSelector
                 Expanded(
                   flex: 1,
                   child: SfCartesianChart(
                     title: ChartTitle(text: 'Data 1 Chart'),
+                    zoomPanBehavior: _zoomPanBehavior, // 추가
                     primaryXAxis: DateTimeAxis(
                       dateFormat: DateFormat('HH:mm:ss'),
                       intervalType: DateTimeIntervalType.seconds,
@@ -725,12 +692,11 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                               xValueMapper: (ChartSampleData data, _) => data.x,
                               yValueMapper: (ChartSampleData data, _) => data.y,
                               color: Colors.green,
+                              animationDuration: 0,
                             ),
                           ],
                   ),
                 ),
-
-                // 아래의 기간 선택기 그래프 - 모든 데이터를 포함
                 Expanded(
                   flex: 1,
                   child: Padding(
@@ -745,7 +711,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                       interval: 1,
                       dateIntervalType: DateIntervalType.seconds,
                       showTicks: true,
-                      showLabels: true,
+                      showLabels: false,
                       controller: rangeController,
                       dragMode: SliderDragMode.both,
                       onChanged: (SfRangeValues values) {
@@ -823,16 +789,14 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
             ),
           ),
 
-          // 오른쪽: 음성 채팅/메시지 영역
-          // 오른쪽: 음성 채팅/메시지 영역
+          // 오른쪽
           Expanded(
             flex: 1,
             child: LayoutBuilder(
               builder: (context, constraints) {
-                // 이 builder 안에서 constraints.maxWidth => 오른쪽 패널의 실제 너비
                 return Column(
                   children: [
-                    // (1) 윗부분: 버튼 + 마이크 아이콘 (기존 코드 그대로)
+                    // 상단
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
@@ -867,7 +831,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                       ],
                     ),
 
-                    // (2) 아래부분: 메시지 리스트
+                    // 대화창
                     Expanded(
                       child: messages.isEmpty
                           ? Center(child: Text('No data available'))
@@ -875,12 +839,8 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                               controller: _scrollController,
                               itemCount: messages.length,
                               itemBuilder: (context, index) {
-                                // 여기서 constraints.maxWidth를 _buildChatBubble에 넘김
                                 return _buildChatBubble(
-                                  context,
-                                  index,
-                                  constraints.maxWidth, // 우측 영역 실제 너비
-                                );
+                                    context, index, constraints.maxWidth);
                               },
                             ),
                     ),
@@ -894,18 +854,15 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     );
   }
 
-  // -- [1] 메시지 빌드 함수 ------------------------------------------------
   Widget _buildChatBubble(BuildContext context, int index, double parentWidth) {
     final message = messages[index];
     final bool isMe = (message['label'] == 'me');
 
     return GestureDetector(
       onTap: () {
-        // 메시지 클릭 시 그래프 이동
         _moveToGraphTime(message['sentTime']);
       },
       onLongPress: () async {
-        // 라벨 수정 기능
         final newValue = await showDialog<String>(
           context: context,
           builder: (context) {
@@ -934,7 +891,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
-        // isMe에 따라 왼쪽/오른쪽 말풍선 구분
         child: isMe
             ? _buildRightBubble(context, message, parentWidth)
             : _buildLeftBubble(context, message, parentWidth),
@@ -942,50 +898,54 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     );
   }
 
-// -- [2] 왼쪽 말풍선 (KK + 파란말풍선) -------------------------------------
+  // 왼쪽 말풍선 (another)
   Widget _buildLeftBubble(
       BuildContext context, Map<String, dynamic> message, double parentWidth) {
-    // unknown인지 판단
     final bool isUnknown = (message['label'] == 'unknown');
+    final emotion = message['emotion'];
 
-    // unknown이면 회색+50% 투명, 아니면 파란색
-    final bubbleColor =
-        isUnknown ? Colors.grey.shade400.withOpacity(0.3) : Colors.blue;
+    // 기본 말풍선 색상
+    Color bubbleColor =
+        isUnknown ? AppColors.leftBubbleUnknown : AppColors.leftBubbleDefault;
 
-    // unknown이면 텍스트 색상도 조금 어둡고 투명하게
+    // 감정이 있으면 override
+    if (emotion == 'anxiety') {
+      bubbleColor = AppColors.emotionAnxiety;
+    } else if (emotion == 'angry') {
+      bubbleColor = AppColors.emotionAngry;
+    }
+
+    // 원형 아바타 색상도 동일
+    Color avatarColor = bubbleColor;
+
+    // 텍스트 색
     final textColor = isUnknown
         ? const Color.fromARGB(221, 63, 63, 63).withOpacity(0.5)
         : Colors.white;
-
-    // emotion 부분도 유사하게
     final emotionColor =
         isUnknown ? Colors.black54.withOpacity(0.3) : Colors.white70;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // KK 프로필 (CircleAvatar)
         CircleAvatar(
-          backgroundColor:
-              isUnknown ? Colors.grey.withOpacity(0.5) : Colors.blue,
+          backgroundColor: avatarColor,
           child: Text(
-            isUnknown ? '??' : '다른', // unknown이면 '??'
+            isUnknown ? '??' : '다른',
             style: TextStyle(color: Colors.white),
           ),
         ),
         SizedBox(width: 8),
-
-        // 말풍선 + 시간
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               padding: const EdgeInsets.all(10),
               constraints: BoxConstraints(
-                maxWidth: parentWidth * 0.35,
+                maxWidth: parentWidth * 0.5,
               ),
               decoration: BoxDecoration(
-                color: bubbleColor, // 수정된 배경색
+                color: bubbleColor,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -993,20 +953,20 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                 children: [
                   Text(
                     message['text'] ?? '',
-                    softWrap: true, // 화면 너비가 모자라면 자동 줄바꿈
-                    maxLines: null, // 줄 수 제한 없음 (길면 여러 줄)
+                    softWrap: true,
+                    maxLines: null,
                     style: TextStyle(
                       fontSize: 16,
-                      color: textColor, // 수정된 텍스트 색
+                      color: textColor,
                     ),
                   ),
-                  if (message['emotion'] != null)
+                  if (emotion != null)
                     Text(
-                      'Emotion: ${message['emotion']}',
+                      'Emotion: $emotion',
                       style: TextStyle(
                         fontSize: 12,
                         fontStyle: FontStyle.italic,
-                        color: emotionColor, // 감정 표기 색상도 투명도 적용 가능
+                        color: emotionColor,
                       ),
                     ),
                 ],
@@ -1023,15 +983,26 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     );
   }
 
-  // -- [3] 오른쪽 말풍선 (흰 말풍선 + 보라 원 아이콘) -------------------------
+  // 오른쪽 말풍선 (me)
   Widget _buildRightBubble(
       BuildContext context, Map<String, dynamic> message, double parentWidth) {
-    // unknown인지 판단
     final bool isUnknown = (message['label'] == 'unknown');
+    final emotion = message['emotion'];
 
-    // unknown이면 좀 더 흐린 회색, 아니면 흰 말풍선
-    final bubbleColor = isUnknown ? Colors.grey.shade300 : Colors.white;
-    // unknown이면 텍스트색도 좀 더 어두운색
+    // 기본 말풍선 색
+    Color bubbleColor =
+        isUnknown ? AppColors.rightBubbleUnknown : AppColors.rightBubbleDefault;
+
+    // 감정이 있으면 override
+    if (emotion == 'anxiety') {
+      bubbleColor = AppColors.emotionAnxiety;
+    } else if (emotion == 'angry') {
+      bubbleColor = AppColors.emotionAngry;
+    }
+
+    // 오른쪽 원형 아이콘 색상도 동일
+    Color circleColor = bubbleColor;
+
     final textColor =
         isUnknown ? const Color.fromARGB(255, 133, 133, 133) : Colors.black87;
     final emotionColor = isUnknown ? Colors.grey : Colors.blueGrey;
@@ -1040,14 +1011,13 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
       mainAxisAlignment: MainAxisAlignment.end,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 말풍선 + 시간
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Container(
               padding: const EdgeInsets.all(10),
               constraints: BoxConstraints(
-                maxWidth: parentWidth * 0.35,
+                maxWidth: parentWidth * 0.5,
               ),
               decoration: BoxDecoration(
                 color: bubbleColor,
@@ -1067,9 +1037,9 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                     message['text'] ?? '',
                     style: TextStyle(fontSize: 16, color: textColor),
                   ),
-                  if (message['emotion'] != null)
+                  if (emotion != null)
                     Text(
-                      'Emotion: ${message['emotion']}',
+                      'Emotion: $emotion',
                       style: TextStyle(
                         fontSize: 12,
                         fontStyle: FontStyle.italic,
@@ -1086,22 +1056,19 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
             ),
           ],
         ),
-
         SizedBox(width: 8),
-
-        // 보라색 원형 아이콘
         Container(
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: isUnknown ? Colors.grey : Colors.purple,
+            color: circleColor,
             shape: BoxShape.circle,
           ),
           child: Center(
             child: Text(
               isUnknown ? '??' : '나',
               style: TextStyle(
-                color: Colors.white,
+                color: const Color.fromARGB(255, 0, 0, 0),
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
               ),
@@ -1113,7 +1080,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   }
 }
 
-// 차트용 데이터 구조
+// 차트 데이터 구조
 class ChartSampleData {
   ChartSampleData({required this.x, required this.y});
   final DateTime x;
