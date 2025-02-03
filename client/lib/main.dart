@@ -605,182 +605,218 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                     ],
                   ),
 
-                // 3개 그래프 + RangeSelector
+                // -------------------------------
+                // 3개 그래프
+                // -------------------------------
                 Expanded(
                   flex: 1,
-                  child: SfCartesianChart(
-                    title: ChartTitle(text: 'Data 1 Chart'),
-                    zoomPanBehavior: _zoomPanBehavior, // 추가
-                    primaryXAxis: DateTimeAxis(
-                      dateFormat: DateFormat('HH:mm:ss'),
-                      intervalType: DateTimeIntervalType.seconds,
-                      rangeController: rangeController,
+                  child: ClipRect(
+                    child: SfCartesianChart(
+                      title: ChartTitle(text: 'Data 1 Chart'),
+                      zoomPanBehavior: _zoomPanBehavior,
+                      primaryXAxis: DateTimeAxis(
+                        dateFormat: DateFormat('HH:mm:ss'),
+                        intervalType: DateTimeIntervalType.seconds,
+                        rangeController: rangeController,
+                      ),
+                      primaryYAxis: NumericAxis(),
+                      series: _isLineChart
+                          ? [
+                              LineSeries<ChartSampleData, DateTime>(
+                                dataSource: chartData1,
+                                xValueMapper: (ChartSampleData data, _) =>
+                                    data.x,
+                                yValueMapper: (ChartSampleData data, _) =>
+                                    data.y,
+                                color: Colors.blue,
+                                animationDuration: 0,
+                              ),
+                            ]
+                          : [
+                              SplineSeries<ChartSampleData, DateTime>(
+                                dataSource: chartData1,
+                                xValueMapper: (ChartSampleData data, _) =>
+                                    data.x,
+                                yValueMapper: (ChartSampleData data, _) =>
+                                    data.y,
+                                color: Colors.blue,
+                                animationDuration: 0,
+                              ),
+                            ],
                     ),
-                    primaryYAxis: NumericAxis(),
-                    series: _isLineChart
-                        ? [
-                            LineSeries<ChartSampleData, DateTime>(
-                              dataSource: chartData1,
-                              xValueMapper: (ChartSampleData data, _) => data.x,
-                              yValueMapper: (ChartSampleData data, _) => data.y,
-                              color: Colors.blue,
-                              animationDuration: 0,
-                            ),
-                          ]
-                        : [
-                            SplineSeries<ChartSampleData, DateTime>(
-                              dataSource: chartData1,
-                              xValueMapper: (ChartSampleData data, _) => data.x,
-                              yValueMapper: (ChartSampleData data, _) => data.y,
-                              color: Colors.blue,
-                              animationDuration: 0,
-                            ),
-                          ],
                   ),
                 ),
                 Expanded(
                   flex: 1,
-                  child: SfCartesianChart(
-                    title: ChartTitle(text: 'Data 2 Chart'),
-                    primaryXAxis: DateTimeAxis(
-                      dateFormat: DateFormat('HH:mm:ss'),
-                      intervalType: DateTimeIntervalType.seconds,
-                      rangeController: rangeController,
+                  child: ClipRect(
+                    child: SfCartesianChart(
+                      title: ChartTitle(text: 'Data 2 Chart'),
+                      primaryXAxis: DateTimeAxis(
+                        dateFormat: DateFormat('HH:mm:ss'),
+                        intervalType: DateTimeIntervalType.seconds,
+                        rangeController: rangeController,
+                      ),
+                      primaryYAxis: NumericAxis(),
+                      series: _isLineChart
+                          ? [
+                              LineSeries<ChartSampleData, DateTime>(
+                                dataSource: chartData2,
+                                xValueMapper: (ChartSampleData data, _) =>
+                                    data.x,
+                                yValueMapper: (ChartSampleData data, _) =>
+                                    data.y,
+                                color: Colors.red,
+                              ),
+                            ]
+                          : [
+                              SplineSeries<ChartSampleData, DateTime>(
+                                dataSource: chartData2,
+                                xValueMapper: (ChartSampleData data, _) =>
+                                    data.x,
+                                yValueMapper: (ChartSampleData data, _) =>
+                                    data.y,
+                                color: Colors.red,
+                              ),
+                            ],
                     ),
-                    primaryYAxis: NumericAxis(),
-                    series: _isLineChart
-                        ? [
-                            LineSeries<ChartSampleData, DateTime>(
-                              dataSource: chartData2,
-                              xValueMapper: (ChartSampleData data, _) => data.x,
-                              yValueMapper: (ChartSampleData data, _) => data.y,
-                              color: Colors.red,
-                            ),
-                          ]
-                        : [
-                            SplineSeries<ChartSampleData, DateTime>(
-                              dataSource: chartData2,
-                              xValueMapper: (ChartSampleData data, _) => data.x,
-                              yValueMapper: (ChartSampleData data, _) => data.y,
-                              color: Colors.red,
-                            ),
-                          ],
                   ),
                 ),
                 Expanded(
                   flex: 1,
-                  child: SfCartesianChart(
-                    title: ChartTitle(text: 'Data 3 Chart'),
-                    primaryXAxis: DateTimeAxis(
-                      dateFormat: DateFormat('HH:mm:ss'),
-                      intervalType: DateTimeIntervalType.seconds,
-                      rangeController: rangeController,
+                  child: ClipRect(
+                    child: SfCartesianChart(
+                      title: ChartTitle(text: 'Data 3 Chart'),
+                      primaryXAxis: DateTimeAxis(
+                        dateFormat: DateFormat('HH:mm:ss'),
+                        intervalType: DateTimeIntervalType.seconds,
+                        rangeController: rangeController,
+                      ),
+                      primaryYAxis: NumericAxis(),
+                      series: _isLineChart
+                          ? [
+                              LineSeries<ChartSampleData, DateTime>(
+                                dataSource: chartData3,
+                                xValueMapper: (ChartSampleData data, _) =>
+                                    data.x,
+                                yValueMapper: (ChartSampleData data, _) =>
+                                    data.y,
+                                color: Colors.green,
+                              ),
+                            ]
+                          : [
+                              SplineSeries<ChartSampleData, DateTime>(
+                                dataSource: chartData3,
+                                xValueMapper: (ChartSampleData data, _) =>
+                                    data.x,
+                                yValueMapper: (ChartSampleData data, _) =>
+                                    data.y,
+                                color: Colors.green,
+                                animationDuration: 0,
+                              ),
+                            ],
                     ),
-                    primaryYAxis: NumericAxis(),
-                    series: _isLineChart
-                        ? [
-                            LineSeries<ChartSampleData, DateTime>(
-                              dataSource: chartData3,
-                              xValueMapper: (ChartSampleData data, _) => data.x,
-                              yValueMapper: (ChartSampleData data, _) => data.y,
-                              color: Colors.green,
-                            ),
-                          ]
-                        : [
-                            SplineSeries<ChartSampleData, DateTime>(
-                              dataSource: chartData3,
-                              xValueMapper: (ChartSampleData data, _) => data.x,
-                              yValueMapper: (ChartSampleData data, _) => data.y,
-                              color: Colors.green,
-                              animationDuration: 0,
-                            ),
-                          ],
                   ),
                 ),
+
+                // -------------------------------
+                // RangeSelector
+                // -------------------------------
                 Expanded(
                   flex: 1,
                   child: Padding(
                     padding: const EdgeInsets.all(8.0),
-                    child: SfRangeSelector(
-                      min: chartData1.isNotEmpty
-                          ? chartData1.first.x
-                          : DateTime.now().subtract(Duration(seconds: 1000)),
-                      max: chartData1.isNotEmpty
-                          ? chartData1.last.x
-                          : DateTime.now(),
-                      interval: 1,
-                      dateIntervalType: DateIntervalType.seconds,
-                      showTicks: true,
-                      showLabels: false,
-                      controller: rangeController,
-                      dragMode: SliderDragMode.both,
-                      onChanged: (SfRangeValues values) {
-                        setState(() {
-                          DateTime newStart = values.start as DateTime;
-                          DateTime newEnd = values.end as DateTime;
-                          rangeController.start = newStart;
-                          rangeController.end = newEnd;
-                        });
-                      },
-                      child: SfCartesianChart(
-                        primaryXAxis: DateTimeAxis(
-                          intervalType: DateTimeIntervalType.seconds,
-                          rangeController: rangeController,
+                    child: ClipRect(
+                      child: SfRangeSelector(
+                        min: chartData1.isNotEmpty
+                            ? chartData1.first.x
+                            : DateTime.now().subtract(Duration(seconds: 1000)),
+                        max: chartData1.isNotEmpty
+                            ? chartData1.last.x
+                            : DateTime.now(),
+                        interval: 1,
+                        dateIntervalType: DateIntervalType.seconds,
+                        showTicks: true,
+                        showLabels: false,
+                        controller: rangeController,
+                        dragMode: SliderDragMode.both,
+                        onChanged: (SfRangeValues values) {
+                          setState(() {
+                            DateTime newStart = values.start as DateTime;
+                            DateTime newEnd = values.end as DateTime;
+
+                            // 여기서 5초(=5000ms) 이하로 안 내려가도록 조정
+                            const minMs = 5000;
+                            final diffMs =
+                                newEnd.difference(newStart).inMilliseconds;
+                            if (diffMs < minMs) {
+                              newEnd =
+                                  newStart.add(Duration(milliseconds: minMs));
+                            }
+
+                            rangeController.start = newStart;
+                            rangeController.end = newEnd;
+                          });
+                        },
+                        child: SfCartesianChart(
+                          primaryXAxis: DateTimeAxis(
+                            intervalType: DateTimeIntervalType.seconds,
+                            rangeController: rangeController,
+                          ),
+                          primaryYAxis: NumericAxis(isVisible: false),
+                          series: _isLineChart
+                              ? [
+                                  LineSeries<ChartSampleData, DateTime>(
+                                    dataSource: chartData1,
+                                    xValueMapper: (ChartSampleData data, _) =>
+                                        data.x,
+                                    yValueMapper: (ChartSampleData data, _) =>
+                                        data.y,
+                                    color: Colors.blue,
+                                  ),
+                                  LineSeries<ChartSampleData, DateTime>(
+                                    dataSource: chartData2,
+                                    xValueMapper: (ChartSampleData data, _) =>
+                                        data.x,
+                                    yValueMapper: (ChartSampleData data, _) =>
+                                        data.y,
+                                    color: Colors.red,
+                                  ),
+                                  LineSeries<ChartSampleData, DateTime>(
+                                    dataSource: chartData3,
+                                    xValueMapper: (ChartSampleData data, _) =>
+                                        data.x,
+                                    yValueMapper: (ChartSampleData data, _) =>
+                                        data.y,
+                                    color: Colors.green,
+                                  ),
+                                ]
+                              : [
+                                  SplineSeries<ChartSampleData, DateTime>(
+                                    dataSource: chartData1,
+                                    xValueMapper: (ChartSampleData data, _) =>
+                                        data.x,
+                                    yValueMapper: (ChartSampleData data, _) =>
+                                        data.y,
+                                    color: Colors.blue,
+                                  ),
+                                  SplineSeries<ChartSampleData, DateTime>(
+                                    dataSource: chartData2,
+                                    xValueMapper: (ChartSampleData data, _) =>
+                                        data.x,
+                                    yValueMapper: (ChartSampleData data, _) =>
+                                        data.y,
+                                    color: Colors.red,
+                                  ),
+                                  SplineSeries<ChartSampleData, DateTime>(
+                                    dataSource: chartData3,
+                                    xValueMapper: (ChartSampleData data, _) =>
+                                        data.x,
+                                    yValueMapper: (ChartSampleData data, _) =>
+                                        data.y,
+                                    color: Colors.green,
+                                  ),
+                                ],
                         ),
-                        primaryYAxis: NumericAxis(isVisible: false),
-                        series: _isLineChart
-                            ? [
-                                LineSeries<ChartSampleData, DateTime>(
-                                  dataSource: chartData1,
-                                  xValueMapper: (ChartSampleData data, _) =>
-                                      data.x,
-                                  yValueMapper: (ChartSampleData data, _) =>
-                                      data.y,
-                                  color: Colors.blue,
-                                ),
-                                LineSeries<ChartSampleData, DateTime>(
-                                  dataSource: chartData2,
-                                  xValueMapper: (ChartSampleData data, _) =>
-                                      data.x,
-                                  yValueMapper: (ChartSampleData data, _) =>
-                                      data.y,
-                                  color: Colors.red,
-                                ),
-                                LineSeries<ChartSampleData, DateTime>(
-                                  dataSource: chartData3,
-                                  xValueMapper: (ChartSampleData data, _) =>
-                                      data.x,
-                                  yValueMapper: (ChartSampleData data, _) =>
-                                      data.y,
-                                  color: Colors.green,
-                                ),
-                              ]
-                            : [
-                                SplineSeries<ChartSampleData, DateTime>(
-                                  dataSource: chartData1,
-                                  xValueMapper: (ChartSampleData data, _) =>
-                                      data.x,
-                                  yValueMapper: (ChartSampleData data, _) =>
-                                      data.y,
-                                  color: Colors.blue,
-                                ),
-                                SplineSeries<ChartSampleData, DateTime>(
-                                  dataSource: chartData2,
-                                  xValueMapper: (ChartSampleData data, _) =>
-                                      data.x,
-                                  yValueMapper: (ChartSampleData data, _) =>
-                                      data.y,
-                                  color: Colors.red,
-                                ),
-                                SplineSeries<ChartSampleData, DateTime>(
-                                  dataSource: chartData3,
-                                  xValueMapper: (ChartSampleData data, _) =>
-                                      data.x,
-                                  yValueMapper: (ChartSampleData data, _) =>
-                                      data.y,
-                                  color: Colors.green,
-                                ),
-                              ],
                       ),
                     ),
                   ),
