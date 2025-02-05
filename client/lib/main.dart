@@ -12,10 +12,9 @@ import 'dart:typed_data';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter/rendering.dart';
 
-// <-- colors.dart import!! (AppColors 정의가 여기에 있다고 가정)
+// <-- colors.dart: AppColors가 정의되어 있다고 가정합니다.
 import 'theme/colors.dart';
 
-// WebSocket 채널 설정
 final WebSocketChannel dataChannel =
     WebSocketChannel.connect(Uri.parse('ws://127.0.0.1:8765')); // 실시간 데이터 채널
 final WebSocketChannel fullAudioChannel =
@@ -30,7 +29,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '상담 보조',
+      title: 'Combined Dashboard',
       theme: ThemeData(
         primarySwatch: Colors.blue,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
@@ -57,6 +56,7 @@ class CombinedDashboard extends StatefulWidget {
 
 class _CombinedDashboardState extends State<CombinedDashboard> {
   final ScrollController _scrollController = ScrollController();
+
   bool _isVoiceDetectionEnabled = true;
   int data_keep_count = 100000;
   IO.Socket? socket;
@@ -75,10 +75,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   bool _isLineChart = true;
   late ZoomPanBehavior _zoomPanBehavior;
   int _currentIconIndex = 0;
-  List<IconData> _icons = [
-    Icons.auto_graph_rounded,
-    Icons.star,
-  ];
+  List<String> _icons = ['assets/image/curve.png', 'assets/image/line.png'];
 
   bool isRecording = false;
   bool isFullRecording = false;
@@ -92,6 +89,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     super.initState();
     _initializeAudioProcessing();
 
+    // onZooming나 onZoomEnd 파라미터는 현재 버전(28.2.3)에서는 제공되지 않으므로 기본 ZoomPanBehavior만 사용합니다.
     _zoomPanBehavior = ZoomPanBehavior(
       enablePinching: true,
       enableDoubleTapZooming: true,
@@ -139,6 +137,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     });
   }
 
+  // _toggleVoiceDetection: 마이크 on/off를 토글합니다.
   void _toggleVoiceDetection() {
     setState(() {
       _isVoiceDetectionEnabled = !_isVoiceDetectionEnabled;
@@ -167,13 +166,11 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
 
   void _initializeAudioProcessing() {
     js.context.callMethod('startAudioProcessing');
-
     html.window.addEventListener('audioStarted', (event) {
       if (!isRecording) {
         _startRecording();
       }
     });
-
     html.window.addEventListener('audioStopped', (event) {
       if (isRecording) {
         _stopRecording();
@@ -208,14 +205,12 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
           .setExtraHeaders({'Upgrade': 'websocket'})
           .build(),
     );
-
     socket!.onConnect((_) {
       setState(() {
         _isConnected = true;
       });
       socket!.emit('counselor_login', {'counselor_id': '1'});
     });
-
     socket!.onDisconnect((_) {
       setState(() {
         _isConnected = false;
@@ -223,21 +218,18 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         _isConnectionAccepted = false;
       });
     });
-
     socket!.on('connection_request', (data) {
       setState(() {
         _isConnectionRequested = true;
         _patientName = data['message'];
       });
     });
-
     socket!.on('connection_accepted', (data) {
       setState(() {
         _isConnectionRequested = false;
         _isConnectionAccepted = true;
       });
     });
-
     _setUpDataUpdateListener();
     socket!.connect();
   }
@@ -245,7 +237,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   void _setUpDataUpdateListener() {
     socket!.off('data_update');
     socket!.off('data_update_batch');
-
     socket!.on('data_update', (data) {
       if (_isStreaming) {
         double newValue = double.parse(data['value'].toString());
@@ -253,7 +244,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         DateTime serverTime = data.containsKey('time')
             ? DateTime.parse(data['time'])
             : DateTime.now();
-
         if (sensor == 'data2') {
           _updateChartData2(newValue, serverTime);
         } else if (sensor == 'data3') {
@@ -261,12 +251,10 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         }
       }
     });
-
     socket!.on('data_update_batch', (data) {
       if (_isStreaming) {
         if (data.containsKey('data1_batch')) {
           List<dynamic> batch = data['data1_batch'];
-
           for (var entry in batch) {
             if (entry is Map &&
                 entry.containsKey('value') &&
@@ -283,7 +271,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         }
       }
     });
-
     socket!.on('feature_detect', (data) {
       final Map<String, dynamic> receivedData = data;
       final String time = receivedData['time'] as String;
@@ -296,7 +283,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     final DateTime targetTime = DateFormat('HH:mm:ss').parse(time);
     int closestIndex = 0;
     Duration smallestDifference = Duration(hours: 24);
-
     for (int i = 0; i < messages.length; i++) {
       final DateTime messageTime =
           DateFormat('HH:mm:ss').parse(messages[i]['sentTime']);
@@ -312,12 +298,10 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   void _addEmotionToClosestMessage(String time, String feature) {
     final DateTime targetTime = DateFormat('HH:mm:ss').parse(time);
     int closestIndex = _findClosestMessageIndex(time);
-
     final DateTime closestMessageTime =
         DateFormat('HH:mm:ss').parse(messages[closestIndex]['sentTime']);
     final Duration difference =
         (closestMessageTime.difference(targetTime)).abs();
-
     if (difference.inSeconds <= 3) {
       setState(() {
         messages[closestIndex]['emotion'] = feature;
@@ -387,17 +371,12 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   }
 
   Future<void> _startRecording() async {
-    if (!_isVoiceDetectionEnabled) {
-      return;
-    }
+    if (!_isVoiceDetectionEnabled) return;
     final stream =
         await html.window.navigator.mediaDevices!.getUserMedia({'audio': true});
     mediaRecorder = html.MediaRecorder(stream);
-
     mediaRecorder!.addEventListener('dataavailable', (event) {
-      if (!_isVoiceDetectionEnabled) {
-        return;
-      }
+      if (!_isVoiceDetectionEnabled) return;
       final blob = (event as html.BlobEvent).data;
       if (blob != null) {
         final reader = html.FileReader();
@@ -406,7 +385,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
           final bytes = reader.result as Uint8List;
           final currentTime =
               DateTime.now().toIso8601String().substring(11, 19);
-
           final data = {
             "audio": bytes,
             "sentTime": currentTime,
@@ -415,7 +393,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         });
       }
     });
-
     mediaRecorder!.start();
     setState(() {
       isRecording = true;
@@ -433,7 +410,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     final stream =
         await html.window.navigator.mediaDevices!.getUserMedia({'audio': true});
     fullMediaRecorder = html.MediaRecorder(stream);
-
     fullMediaRecorder!.addEventListener('dataavailable', (event) {
       final blob = (event as html.BlobEvent).data;
       if (blob != null) {
@@ -445,7 +421,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         });
       }
     });
-
     fullMediaRecorder!.start();
     setState(() {
       isFullRecording = true;
@@ -457,9 +432,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     setState(() {
       isFullRecording = false;
     });
-
     await Future.delayed(Duration(seconds: 1));
-
     if (fullAudioData.isNotEmpty) {
       final timeOnly = DateTime.now().toIso8601String().substring(11, 19);
       final data = {
@@ -504,7 +477,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
       int hours = int.parse(parts[0]);
       int minutes = int.parse(parts[1]);
       int seconds = int.parse(parts[2]);
-
       DateTime parsedTime = DateTime(
         DateTime.now().year,
         DateTime.now().month,
@@ -513,7 +485,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         minutes,
         seconds,
       );
-
       setState(() {
         rangeController.start = parsedTime.subtract(Duration(seconds: 5));
         rangeController.end = parsedTime.add(Duration(seconds: 5));
@@ -527,29 +498,23 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
         title: Text("사용자 데이터 그래프"),
         actions: [
           IconButton(
-            icon: Icon(
-              _icons[_currentIconIndex],
-              color: Colors.black,
-            ),
+            icon: Image.asset(_icons[_currentIconIndex],
+                width: 30, height: 30, color: Colors.black),
             onPressed: () {
               setState(() {
                 _currentIconIndex = (_currentIconIndex + 1) % _icons.length;
                 _isLineChart = !_isLineChart;
               });
             },
-            tooltip: _isLineChart ? "Switch to Curve" : "Switch to Line",
           ),
         ],
       ),
       body: Row(
         children: [
-          // 왼쪽(그래프)
+          // 왼쪽 (그래프 영역)
           Expanded(
             flex: 3,
             child: Column(
@@ -604,10 +569,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                       ),
                     ],
                   ),
-
-                // -------------------------------
-                // 3개 그래프
-                // -------------------------------
                 Expanded(
                   flex: 1,
                   child: ClipRect(
@@ -717,10 +678,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                     ),
                   ),
                 ),
-
-                // -------------------------------
-                // RangeSelector
-                // -------------------------------
                 Expanded(
                   flex: 1,
                   child: Padding(
@@ -743,8 +700,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                           setState(() {
                             DateTime newStart = values.start as DateTime;
                             DateTime newEnd = values.end as DateTime;
-
-                            // 여기서 5초(=5000ms) 이하로 안 내려가도록 조정
                             const minMs = 5000;
                             final diffMs =
                                 newEnd.difference(newStart).inMilliseconds;
@@ -752,7 +707,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                               newEnd =
                                   newStart.add(Duration(milliseconds: minMs));
                             }
-
                             rangeController.start = newStart;
                             rangeController.end = newEnd;
                           });
@@ -824,15 +778,13 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
               ],
             ),
           ),
-
-          // 오른쪽
+          // 오른쪽 (대화창)
           Expanded(
             flex: 1,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 return Column(
                   children: [
-                    // 상단
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
@@ -866,8 +818,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                         ),
                       ],
                     ),
-
-                    // 대화창
                     Expanded(
                       child: messages.isEmpty
                           ? Center(child: Text('No data available'))
@@ -893,7 +843,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   Widget _buildChatBubble(BuildContext context, int index, double parentWidth) {
     final message = messages[index];
     final bool isMe = (message['label'] == 'me');
-
     return GestureDetector(
       onTap: () {
         _moveToGraphTime(message['sentTime']);
@@ -904,11 +853,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
           builder: (context) {
             return SimpleDialog(
               title: Text('Select Label'),
-              children: [
-                'me',
-                'another',
-                'unknown',
-              ].map((label) {
+              children: ['me', 'another', 'unknown'].map((label) {
                 return SimpleDialogOption(
                   onPressed: () {
                     Navigator.pop(context, label);
@@ -934,42 +879,30 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     );
   }
 
-  // 왼쪽 말풍선 (another)
   Widget _buildLeftBubble(
       BuildContext context, Map<String, dynamic> message, double parentWidth) {
     final bool isUnknown = (message['label'] == 'unknown');
     final emotion = message['emotion'];
-
-    // 기본 말풍선 색상
     Color bubbleColor =
         isUnknown ? AppColors.leftBubbleUnknown : AppColors.leftBubbleDefault;
-
-    // 감정이 있으면 override
     if (emotion == 'anxiety') {
       bubbleColor = AppColors.emotionAnxiety;
     } else if (emotion == 'angry') {
       bubbleColor = AppColors.emotionAngry;
     }
-
-    // 원형 아바타 색상도 동일
     Color avatarColor = bubbleColor;
-
-    // 텍스트 색
     final textColor = isUnknown
         ? const Color.fromARGB(221, 63, 63, 63).withOpacity(0.5)
         : Colors.white;
     final emotionColor =
         isUnknown ? Colors.black54.withOpacity(0.3) : Colors.white70;
-
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         CircleAvatar(
           backgroundColor: avatarColor,
-          child: Text(
-            isUnknown ? '??' : '다른',
-            style: TextStyle(color: Colors.white),
-          ),
+          child: Text(isUnknown ? '??' : '다른',
+              style: TextStyle(color: Colors.white)),
         ),
         SizedBox(width: 8),
         Column(
@@ -977,9 +910,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
           children: [
             Container(
               padding: const EdgeInsets.all(10),
-              constraints: BoxConstraints(
-                maxWidth: parentWidth * 0.5,
-              ),
+              constraints: BoxConstraints(maxWidth: parentWidth * 0.5),
               decoration: BoxDecoration(
                 color: bubbleColor,
                 borderRadius: BorderRadius.circular(8),
@@ -987,62 +918,43 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    message['text'] ?? '',
-                    softWrap: true,
-                    maxLines: null,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: textColor,
-                    ),
-                  ),
+                  Text(message['text'] ?? '',
+                      softWrap: true,
+                      maxLines: null,
+                      style: TextStyle(fontSize: 16, color: textColor)),
                   if (emotion != null)
-                    Text(
-                      'Emotion: $emotion',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic,
-                        color: emotionColor,
-                      ),
-                    ),
+                    Text('Emotion: $emotion',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                            color: emotionColor)),
                 ],
               ),
             ),
             SizedBox(height: 4),
-            Text(
-              message['sentTime'] ?? '',
-              style: TextStyle(fontSize: 12, color: Colors.black54),
-            ),
+            Text(message['sentTime'] ?? '',
+                style: TextStyle(fontSize: 12, color: Colors.black54)),
           ],
         ),
       ],
     );
   }
 
-  // 오른쪽 말풍선 (me)
   Widget _buildRightBubble(
       BuildContext context, Map<String, dynamic> message, double parentWidth) {
     final bool isUnknown = (message['label'] == 'unknown');
     final emotion = message['emotion'];
-
-    // 기본 말풍선 색
     Color bubbleColor =
         isUnknown ? AppColors.rightBubbleUnknown : AppColors.rightBubbleDefault;
-
-    // 감정이 있으면 override
     if (emotion == 'anxiety') {
       bubbleColor = AppColors.emotionAnxiety;
     } else if (emotion == 'angry') {
       bubbleColor = AppColors.emotionAngry;
     }
-
-    // 오른쪽 원형 아이콘 색상도 동일
     Color circleColor = bubbleColor;
-
     final textColor =
         isUnknown ? const Color.fromARGB(255, 133, 133, 133) : Colors.black87;
     final emotionColor = isUnknown ? Colors.grey : Colors.blueGrey;
-
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1052,63 +964,47 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
           children: [
             Container(
               padding: const EdgeInsets.all(10),
-              constraints: BoxConstraints(
-                maxWidth: parentWidth * 0.5,
-              ),
+              constraints: BoxConstraints(maxWidth: parentWidth * 0.5),
               decoration: BoxDecoration(
                 color: bubbleColor,
                 borderRadius: BorderRadius.circular(8),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.shade300,
-                    offset: Offset(0, 1),
-                    blurRadius: 4,
-                  ),
+                      color: Colors.grey.shade300,
+                      offset: Offset(0, 1),
+                      blurRadius: 4)
                 ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    message['text'] ?? '',
-                    style: TextStyle(fontSize: 16, color: textColor),
-                  ),
+                  Text(message['text'] ?? '',
+                      style: TextStyle(fontSize: 16, color: textColor)),
                   if (emotion != null)
-                    Text(
-                      'Emotion: $emotion',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic,
-                        color: emotionColor,
-                      ),
-                    ),
+                    Text('Emotion: $emotion',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                            color: emotionColor)),
                 ],
               ),
             ),
             SizedBox(height: 4),
-            Text(
-              message['sentTime'] ?? '',
-              style: TextStyle(fontSize: 12, color: Colors.black54),
-            ),
+            Text(message['sentTime'] ?? '',
+                style: TextStyle(fontSize: 12, color: Colors.black54)),
           ],
         ),
         SizedBox(width: 8),
         Container(
           width: 40,
           height: 40,
-          decoration: BoxDecoration(
-            color: circleColor,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: circleColor, shape: BoxShape.circle),
           child: Center(
-            child: Text(
-              isUnknown ? '??' : '나',
-              style: TextStyle(
-                color: const Color.fromARGB(255, 0, 0, 0),
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            child: Text(isUnknown ? '??' : '나',
+                style: TextStyle(
+                    color: const Color.fromARGB(255, 0, 0, 0),
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold)),
           ),
         ),
       ],
@@ -1116,7 +1012,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   }
 }
 
-// 차트 데이터 구조
 class ChartSampleData {
   ChartSampleData({required this.x, required this.y});
   final DateTime x;

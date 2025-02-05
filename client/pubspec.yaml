@@ -44,14 +44,18 @@ dependencies:
   desktop_window: 0.4.0
   intl: '>=0.18.1 <0.20.0'
   
-  syncfusion_flutter_charts: ^26.2.14
-  syncfusion_flutter_sliders: ^26.2.14
-  syncfusion_flutter_core: ^26.2.14
+  syncfusion_flutter_charts: ^28.2.3
+  syncfusion_flutter_sliders: ^28.2.3
+  syncfusion_flutter_core: ^28.2.3
   audioplayers: ^0.20.1  # 최신 버전을 확인하고 입력하세요
   microphone: ^0.1.0
   html: ^0.15.5  # html 패키지 추가
   flutter_sound: ^9.0.0  # 최신 안정 버전을 사용
   web_socket_channel: ^2.1.0  # 최신 안정 버전 확인 후 사용
+
+  # 대화 창에 index 부여
+  scrollable_positioned_list: ^0.3.8
+  
   
 
 dev_dependencies:
