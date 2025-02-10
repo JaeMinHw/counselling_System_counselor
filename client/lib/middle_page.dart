@@ -3,6 +3,8 @@ import 'package:client/data_measure.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+// 데이터 측정 화면 갔다가 뒤로 오고 다시 데이터 측정 화면 가면 에러 발생
+
 void main() {
   debugRepaintRainbowEnabled = true;
   runApp(const MyApp());
