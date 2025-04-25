@@ -21,7 +21,8 @@ final WebSocketChannel fullAudioChannel =
     WebSocketChannel.connect(Uri.parse('ws://127.0.0.1:8766')); // 전체 오디오 데이터 채널
 
 void main() {
-  debugRepaintRainbowEnabled = true;
+  // 사용하는 이유는 어떤 위젯이 어느 영역을 차지하는지 확인하기 위해
+  // debugRepaintRainbowEnabled = true;
   runApp(MyApp());
 }
 

@@ -15,17 +15,19 @@ import 'package:flutter/rendering.dart';
 // <-- colors.dart: AppColors가 정의되어 있다고 가정합니다.
 import 'theme/colors.dart';
 
-final WebSocketChannel dataChannel =
-    WebSocketChannel.connect(Uri.parse('ws://127.0.0.1:8765')); // 실시간 데이터 채널
 final WebSocketChannel fullAudioChannel =
     WebSocketChannel.connect(Uri.parse('ws://127.0.0.1:8766')); // 전체 오디오 데이터 채널
 
-void main() {
-  debugRepaintRainbowEnabled = true;
-  runApp(DataMeasure());
-}
+// void main() {
+//   // debugRepaintRainbowEnabled = true;
+//   runApp(DataMeasure());
+// }
 
 class DataMeasure extends StatelessWidget {
+  final String clientName;
+  final String clientId;
+  const DataMeasure(
+      {required this.clientName, required this.clientId, super.key});
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -43,19 +45,27 @@ class DataMeasure extends StatelessWidget {
           titleTextStyle: TextStyle(color: Colors.black, fontSize: 20),
         ),
       ),
-      home: CombinedDashboard(),
+      home: CombinedDashboard(clientName: clientName, clientId: clientId),
       debugShowCheckedModeBanner: false,
     );
   }
 }
 
 class CombinedDashboard extends StatefulWidget {
+  final String clientName; // ✅ 추가
+  final String clientId;
+
+  const CombinedDashboard(
+      {required this.clientName, required this.clientId, super.key});
   @override
   _CombinedDashboardState createState() => _CombinedDashboardState();
 }
 
 class _CombinedDashboardState extends State<CombinedDashboard> {
+  late final WebSocketChannel dataChannel;
   final ScrollController _scrollController = ScrollController();
+
+  StreamSubscription? _dataSubscription;
 
   bool _isVoiceDetectionEnabled = true;
   int data_keep_count = 100000;
@@ -87,9 +97,11 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   @override
   void initState() {
     super.initState();
-    _initializeAudioProcessing();
 
-    // onZooming나 onZoomEnd 파라미터는 현재 버전(28.2.3)에서는 제공되지 않으므로 기본 ZoomPanBehavior만 사용합니다.
+    int? _counselingId; // 👈 맨 위에 변수 추가
+
+    _initializeAudioProcessing();
+    dataChannel = WebSocketChannel.connect(Uri.parse('ws://127.0.0.1:8765'));
     _zoomPanBehavior = ZoomPanBehavior(
       enablePinching: true,
       enableDoubleTapZooming: true,
@@ -102,39 +114,41 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
       end: DateTime.now(),
     );
 
-    // WebSocket 메시지 수신
-    dataChannel.stream.listen((message) {
-      final decodedMessage = json.decode(message);
-      setState(() {
-        if (decodedMessage is List) {
-          for (var data in decodedMessage) {
-            String text = data['text'] ?? '';
+    // ✅ Stream listen은 한 번만 실행되도록
+    if (_dataSubscription == null) {
+      _dataSubscription = dataChannel.stream.listen((message) {
+        final decodedMessage = json.decode(message);
+        setState(() {
+          if (decodedMessage is List) {
+            for (var data in decodedMessage) {
+              String text = data['text'] ?? '';
+              if (text.isNotEmpty) {
+                messages.add({
+                  "label": data['label'] ?? 'unknown',
+                  "text": text,
+                  "start": data['start'] ?? 0.0,
+                  "end": data['end'] ?? 0.0,
+                  "sentTime": data['send_time'] ?? '',
+                });
+              }
+            }
+          } else if (decodedMessage is Map<String, dynamic>) {
+            String text = decodedMessage['text'] ?? '';
             if (text.isNotEmpty) {
               messages.add({
-                "label": data['label'] ?? 'unknown',
+                "label": decodedMessage['label'] ?? 'unknown',
                 "text": text,
-                "start": data['start'] ?? 0.0,
-                "end": data['end'] ?? 0.0,
-                "sentTime": data['send_time'] ?? '',
+                "start": decodedMessage['start'] ?? 0.0,
+                "end": decodedMessage['end'] ?? 0.0,
+                "sentTime": decodedMessage['send_time'] ?? '',
               });
             }
           }
-        } else if (decodedMessage is Map<String, dynamic>) {
-          String text = decodedMessage['text'] ?? '';
-          if (text.isNotEmpty) {
-            messages.add({
-              "label": decodedMessage['label'] ?? 'unknown',
-              "text": text,
-              "start": decodedMessage['start'] ?? 0.0,
-              "end": decodedMessage['end'] ?? 0.0,
-              "sentTime": decodedMessage['send_time'] ?? '',
-            });
-          }
-        }
-        _sortMessagesByTime();
-        _scrollToBottom();
+          _sortMessagesByTime();
+          _scrollToBottom();
+        });
       });
-    });
+    }
   }
 
   // _toggleVoiceDetection: 마이크 on/off를 토글합니다.
@@ -180,10 +194,18 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
 
   @override
   void dispose() {
+    _dataSubscription?.cancel();
     _scrollController.dispose();
     dataChannel.sink.close();
     fullAudioChannel.sink.close();
     rangeController.dispose();
+    // ✅ 마이크 녹음 중이면 정지
+    if (isRecording) {
+      _stopRecording();
+    }
+    if (isFullRecording) {
+      _stopFullRecording();
+    }
     super.dispose();
   }
 
@@ -498,7 +520,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("사용자 데이터 그래프"),
+        title: Text("${widget.clientName} 데이터 그래프"),
         actions: [
           IconButton(
             icon: Image.asset(_icons[_currentIconIndex],
@@ -534,7 +556,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                       ElevatedButton(
                         onPressed: () {
                           if (socket != null && socket!.connected) {
-                            socket!.emit('accept_connection');
+                            socket!.emit('accept_connection', widget.clientId);
                           }
                         },
                         child: Text('Accept Connection'),
@@ -644,38 +666,103 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                 ),
                 Expanded(
                   flex: 1,
-                  child: ClipRect(
-                    child: SfCartesianChart(
-                      title: ChartTitle(text: 'Data 3 Chart'),
-                      primaryXAxis: DateTimeAxis(
-                        dateFormat: DateFormat('HH:mm:ss'),
-                        intervalType: DateTimeIntervalType.seconds,
-                        rangeController: rangeController,
-                      ),
-                      primaryYAxis: NumericAxis(),
-                      series: _isLineChart
-                          ? [
-                              LineSeries<ChartSampleData, DateTime>(
-                                dataSource: chartData3,
-                                xValueMapper: (ChartSampleData data, _) =>
-                                    data.x,
-                                yValueMapper: (ChartSampleData data, _) =>
-                                    data.y,
-                                color: Colors.green,
-                              ),
-                            ]
-                          : [
-                              SplineSeries<ChartSampleData, DateTime>(
-                                dataSource: chartData3,
-                                xValueMapper: (ChartSampleData data, _) =>
-                                    data.x,
-                                yValueMapper: (ChartSampleData data, _) =>
-                                    data.y,
-                                color: Colors.green,
-                                animationDuration: 0,
-                              ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 1,
+                        child: Container(
+                          alignment: Alignment.topLeft,
+                          // margin: const EdgeInsets.only(left: 10),
+                          color: const Color.fromARGB(255, 202, 209, 243),
+                          child: Column(
+                            children: [
+                              Expanded(
+                                  flex: 1,
+                                  child: Container(
+                                    child: Text(
+                                      "Theta : ",
+                                      style: TextStyle(
+                                        fontSize: 30,
+                                        color: Colors.black,
+                                        fontFamily: "Pretendard",
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  )),
+                              Expanded(
+                                  flex: 1,
+                                  child: Container(
+                                    child: Text(
+                                      "Alpha : ",
+                                      style: TextStyle(
+                                        fontSize: 30,
+                                        color: Colors.black,
+                                        fontFamily: "Pretendard",
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  )),
+                              Expanded(
+                                  flex: 1,
+                                  child: Container(
+                                    margin: const EdgeInsets.only(left: 15),
+                                    child: Text(
+                                      "Low Beta : ",
+                                      style: TextStyle(
+                                        fontSize: 30,
+                                        color: Colors.black,
+                                        fontFamily: "Pretendard",
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  )),
+                              Expanded(
+                                  flex: 1,
+                                  child: Container(
+                                    margin: const EdgeInsets.only(left: 15),
+                                    child: Text(
+                                      "High Beta : ",
+                                      style: TextStyle(
+                                        fontSize: 30,
+                                        color: Colors.black,
+                                        fontFamily: "Pretendard",
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  )),
+                              Expanded(
+                                  flex: 1,
+                                  child: Container(
+                                    child: Text(
+                                      "Gamma : ",
+                                      textAlign: TextAlign.left,
+                                      style: TextStyle(
+                                        fontSize: 30,
+                                        color: Colors.black,
+                                        fontFamily: "Pretendard",
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  )),
                             ],
-                    ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Container(
+                          color: Colors.green[100],
+                          child: Center(child: Text('두 번째 구역')),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 1,
+                        child: Container(
+                          color: Colors.blue[100],
+                          child: Center(child: Text('세 번째 구역')),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Expanded(
