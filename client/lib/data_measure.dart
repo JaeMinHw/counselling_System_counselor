@@ -22,6 +22,7 @@ final WebSocketChannel fullAudioChannel =
 //   // debugRepaintRainbowEnabled = true;
 //   runApp(DataMeasure());
 // }
+int? _counselingId; // ✅ counseling_id 저장할 변수 추가
 
 class DataMeasure extends StatelessWidget {
   final String clientName;
@@ -97,8 +98,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
   @override
   void initState() {
     super.initState();
-
-    int? _counselingId; // 👈 맨 위에 변수 추가
 
     _initializeAudioProcessing();
     dataChannel = WebSocketChannel.connect(Uri.parse('ws://127.0.0.1:8765'));
@@ -251,7 +250,15 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         _isConnectionRequested = false;
         _isConnectionAccepted = true;
       });
+      // ✅ counseling_id 받아서 저장
+      if (data != null && data is Map && data.containsKey('counseling_id')) {
+        _counselingId = data['counseling_id'];
+        debugPrint('Received counseling_id: $_counselingId');
+      } else {
+        debugPrint('No counseling_id received!');
+      }
     });
+
     _setUpDataUpdateListener();
     socket!.connect();
   }
@@ -410,6 +417,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
           final data = {
             "audio": bytes,
             "sentTime": currentTime,
+            "counseling_id": _counselingId, // <-- 여기에 추가!
           };
           dataChannel.sink.add(json.encode(data));
         });

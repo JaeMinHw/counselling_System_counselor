@@ -2,8 +2,6 @@ import 'package:client/data_history.dart';
 import 'package:client/data_measure.dart';
 import 'package:flutter/material.dart';
 
-// 데이터 측정 화면 갔다가 뒤로 오고 다시 데이터 측정 화면 가면 에러 발생
-
 // void main() {
 //   // debugRepaintRainbowEnabled = true;
 //   runApp(const MyApp());
@@ -50,7 +48,10 @@ class _MiddlePageState extends State<MiddlePage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const DataHistory(),
+                    builder: (context) => DataHistory(
+                        // clientName: widget.clientName, // ✅ 넘겨줌
+                        // clientId: widget.clientId, // ✅ 넘겨줌
+                        ),
                   ),
                 );
               },
