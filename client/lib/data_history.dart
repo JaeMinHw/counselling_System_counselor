@@ -119,7 +119,6 @@ class _DataHistoryState extends State<DataHistory> {
       MaterialPageRoute(
         builder: (context) => CounselingDetailPage(
           counselingId: counselingId,
-          clientName: clientName, // ✅ clientName도 넘긴다!
         ),
       ),
     );

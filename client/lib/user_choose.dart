@@ -97,6 +97,31 @@ class _UserChooseState extends State<UserChoose> {
     }
   }
 
+  Future<void> _addClient(
+      String username, String userId, String phone, String gender) async {
+    try {
+      final response = await http.post(
+        Uri.parse('http://218.151.124.83:5000/add_client'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'username': username,
+          'user_id': userId,
+          'counselor_id': myId,
+          'phone': phone,
+          'gender': gender, // ✅ 추가: 성별도 같이 보낸다
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        print('내담자 추가 성공');
+      } else {
+        print('내담자 추가 실패: ${response.body}');
+      }
+    } catch (e) {
+      print('서버 오류: $e');
+    }
+  }
+
   // ✅ 검색 함수
   void _filterClients(String keyword) {
     setState(() {
@@ -106,6 +131,101 @@ class _UserChooseState extends State<UserChoose> {
               client.username.toLowerCase().contains(keyword.toLowerCase()))
           .toList();
     });
+  }
+
+  void _showAddClientDialog() {
+    String username = '';
+    String userId = '';
+    String phone = '';
+    String gender = '남자'; // 기본값 남자
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          // 💬 여기를 StatefulBuilder로 감싸야 해!!
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text('내담자 추가'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    decoration: InputDecoration(labelText: '내담자 이름'),
+                    onChanged: (value) {
+                      username = value;
+                    },
+                  ),
+                  TextField(
+                    decoration: InputDecoration(labelText: '내담자 ID'),
+                    onChanged: (value) {
+                      userId = value;
+                    },
+                  ),
+                  TextField(
+                    decoration: InputDecoration(labelText: '내담자 전화번호'),
+                    onChanged: (value) {
+                      phone = value;
+                    },
+                  ),
+                  SizedBox(height: 10),
+                  Text('성별 선택', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: RadioListTile<String>(
+                          title: Text('남자'),
+                          value: '남자',
+                          groupValue: gender,
+                          onChanged: (value) {
+                            setState(() {
+                              gender = value!;
+                            });
+                          },
+                        ),
+                      ),
+                      Expanded(
+                        child: RadioListTile<String>(
+                          title: Text('여자'),
+                          value: '여자',
+                          groupValue: gender,
+                          onChanged: (value) {
+                            setState(() {
+                              gender = value!;
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('취소'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (username.isNotEmpty && userId.isNotEmpty) {
+                      await _addClient(username, userId, phone, gender);
+                      Navigator.pop(context);
+
+                      // 여기! 페이지를 통째로 다시 띄워
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (context) => UserChoose()),
+                      );
+                    }
+                  },
+                  child: Text('추가'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -192,6 +312,7 @@ class _UserChooseState extends State<UserChoose> {
                   child: ElevatedButton(
                     onPressed: () {
                       // 내담자 추가 기능 구현
+                      _showAddClientDialog();
                     },
                     child: const Text('내담자 추가'),
                   ),

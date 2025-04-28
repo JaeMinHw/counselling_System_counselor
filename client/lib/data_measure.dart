@@ -78,7 +78,7 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
 
   List<ChartSampleData> chartData1 = [];
   List<ChartSampleData> chartData2 = [];
-  List<ChartSampleData> chartData3 = [];
+
   late RangeController rangeController;
   DateTime _currentDate = DateTime.now();
   bool isStreaming = false;
@@ -275,8 +275,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
             : DateTime.now();
         if (sensor == 'data2') {
           _updateChartData2(newValue, serverTime);
-        } else if (sensor == 'data3') {
-          _updateChartData3(newValue, serverTime);
         }
       }
     });
@@ -388,17 +386,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
     });
   }
 
-  void _updateChartData3(double data3, DateTime time) {
-    setState(() {
-      chartData3.add(ChartSampleData(x: time, y: data3));
-      if (chartData3.length > data_keep_count) {
-        chartData3.removeAt(0);
-      }
-      rangeController.start = chartData3.last.x.subtract(Duration(seconds: 5));
-      rangeController.end = chartData3.last.x;
-    });
-  }
-
   Future<void> _startRecording() async {
     if (!_isVoiceDetectionEnabled) return;
     final stream =
@@ -494,7 +481,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
         DateTime stopTime = DateTime.now();
         chartData1.add(ChartSampleData(x: stopTime, y: 0));
         chartData2.add(ChartSampleData(x: stopTime, y: 0));
-        chartData3.add(ChartSampleData(x: stopTime, y: 0));
       });
       socket!.emit('stop');
       socket!.off('data_update');
@@ -830,14 +816,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                                         data.y,
                                     color: Colors.red,
                                   ),
-                                  LineSeries<ChartSampleData, DateTime>(
-                                    dataSource: chartData3,
-                                    xValueMapper: (ChartSampleData data, _) =>
-                                        data.x,
-                                    yValueMapper: (ChartSampleData data, _) =>
-                                        data.y,
-                                    color: Colors.green,
-                                  ),
                                 ]
                               : [
                                   SplineSeries<ChartSampleData, DateTime>(
@@ -855,14 +833,6 @@ class _CombinedDashboardState extends State<CombinedDashboard> {
                                     yValueMapper: (ChartSampleData data, _) =>
                                         data.y,
                                     color: Colors.red,
-                                  ),
-                                  SplineSeries<ChartSampleData, DateTime>(
-                                    dataSource: chartData3,
-                                    xValueMapper: (ChartSampleData data, _) =>
-                                        data.x,
-                                    yValueMapper: (ChartSampleData data, _) =>
-                                        data.y,
-                                    color: Colors.green,
                                   ),
                                 ],
                         ),
