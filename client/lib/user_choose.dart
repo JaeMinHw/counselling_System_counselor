@@ -211,7 +211,7 @@ class _UserChooseState extends State<UserChoose> {
                       await _addClient(username, userId, phone, gender);
                       Navigator.pop(context);
 
-                      // 여기! 페이지를 통째로 다시 띄워
+                      // 여기 페이지를 통째로 다시 띄워
                       Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(builder: (context) => UserChoose()),
