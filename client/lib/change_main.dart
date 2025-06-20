@@ -35,7 +35,8 @@ class _ClientRecordPageState extends State<ClientRecordPage> {
   bool _isNameAsc = true;
 
   int? _expandedIndex;
-  Map<String, Map<String, List<String>>> _clientTimesByDate = {};
+  Map<String, Map<String, List<Map<String, dynamic>>>> _clientTimesByDate = {};
+
   Map<String, List<DateTime>> _clientMarkedDates = {};
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
@@ -69,7 +70,7 @@ class _ClientRecordPageState extends State<ClientRecordPage> {
     );
     if (response.statusCode == 200) {
       List data = json.decode(response.body);
-      Map<String, List<String>> timeMap = {};
+      Map<String, List<Map<String, dynamic>>> timeMap = {};
       List<DateTime> markedDates = [];
 
       for (var item in data) {
@@ -78,7 +79,12 @@ class _ClientRecordPageState extends State<ClientRecordPage> {
           String dateKey = '${dt.year}-${dt.month}-${dt.day}';
           String time =
               '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
-          timeMap.putIfAbsent(dateKey, () => []).add(time);
+
+          timeMap.putIfAbsent(dateKey, () => []).add({
+            'time': time,
+            'counseling_id': item['counseling_id'],
+          });
+
           markedDates.add(DateTime(dt.year, dt.month, dt.day));
         } catch (_) {}
       }
@@ -547,7 +553,7 @@ class _ClientRecordPageState extends State<ClientRecordPage> {
     final dateKey =
         "${selectedDay.year}-${selectedDay.month}-${selectedDay.day}";
     final times = _clientTimesByDate[clientId]?[dateKey] ?? [];
-
+    final sessions = _clientTimesByDate[clientId]?[dateKey] ?? [];
     if (times.isEmpty) return SizedBox.shrink();
 
     return Column(
@@ -560,19 +566,20 @@ class _ClientRecordPageState extends State<ClientRecordPage> {
           alignment: WrapAlignment.center,
           spacing: 12,
           runSpacing: 8,
-          children: times.map((t) {
+          children: sessions.map((session) {
+            final t = session['time'];
+            final counselingId = session['counseling_id'];
+
             return ElevatedButton(
               onPressed: () {
-                print(
-                    'Clicked $t for client $clientId to name $clientName on $dateKey');
-                // move to data_history
-                // Navigator.pop(context);
-                // _goToDetailPage(s['counseling_id'], s['client_name']);
+                print('⏰ 시간: $t / 🆔 counseling_id: $counselingId');
+
+                _goToDetailPage(counselingId, clientName); // detail 페이지로 이동
               },
               child: Text(t),
             );
           }).toList(),
-        ),
+        )
       ],
     );
   }

@@ -53,6 +53,8 @@ class _DataHistoryState extends State<DataHistory> {
       }
     });
 
+    socket!.emit('eeg_data', {'counselor_id': '1'});
+
     socket!.onDisconnect((_) {
       print('Socket disconnected');
     });
